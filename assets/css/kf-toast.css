@@ -1,0 +1,100 @@
+/**
+ * KennelFlow toast (front-end) and confirmation overlay (admin + front-end).
+ *
+ * @package KennelFlow
+ */
+
+/* --- Front-end toast stack --- */
+.kf-toast-root {
+	position: fixed;
+	right: 1rem;
+	bottom: 1rem;
+	z-index: 100000;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	max-width: min(22rem, calc(100vw - 2rem));
+	pointer-events: none;
+}
+
+.kf-toast {
+	padding: 0.75rem 1rem;
+	border-radius: 6px;
+	font-size: 0.9375rem;
+	line-height: 1.4;
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+	pointer-events: auto;
+	transition:
+		opacity 0.25s ease,
+		transform 0.25s ease;
+}
+
+.kf-toast--info {
+	background: #1e293b;
+	color: #f8fafc;
+	border: 1px solid #334155;
+}
+
+.kf-toast--success {
+	background: #14532d;
+	color: #f0fdf4;
+	border: 1px solid #166534;
+}
+
+.kf-toast--warning {
+	background: #713f12;
+	color: #fffbeb;
+	border: 1px solid #92400e;
+}
+
+.kf-toast--error {
+	background: #7f1d1d;
+	color: #fef2f2;
+	border: 1px solid #991b1b;
+}
+
+.kf-toast--out {
+	opacity: 0;
+	transform: translateY(8px);
+}
+
+/* --- Non-blocking confirm (replaces window.confirm) --- */
+.kf-toast-confirm {
+	position: fixed;
+	inset: 0;
+	z-index: 100001;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1rem;
+	background: rgba(15, 23, 42, 0.45);
+	pointer-events: auto;
+}
+
+.kf-toast-confirm__box {
+	max-width: 28rem;
+	width: 100%;
+	padding: 1.25rem;
+	border-radius: 8px;
+	background: #fff;
+	color: #0f172a;
+	box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.kf-toast-confirm__box--admin {
+	/* Uses WP admin .button classes inside */
+	max-width: 32rem;
+}
+
+.kf-toast-confirm__msg {
+	margin: 0 0 1rem;
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+.kf-toast-confirm__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	justify-content: flex-end;
+}

@@ -1,0 +1,269 @@
+/* KennelFlow owner portal (shortcode) */
+.kf-portal {
+	max-width: 960px;
+	margin: 0 auto;
+}
+
+.kf-portal__tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin-bottom: 1.25rem;
+	border-bottom: 1px solid #d0d5dd;
+}
+
+.kf-portal__tab {
+	background: #f6f7f9;
+	border: 1px solid #d0d5dd;
+	border-bottom: none;
+	padding: 0.5rem 1rem;
+	cursor: pointer;
+	border-radius: 4px 4px 0 0;
+	font: inherit;
+}
+
+.kf-portal__tab.is-active {
+	background: #fff;
+	font-weight: 600;
+}
+
+.kf-portal__tab:focus {
+	outline: 2px solid #2271b1;
+	outline-offset: 2px;
+}
+
+.kf-portal__panel {
+	display: none;
+	padding: 1rem 0;
+}
+
+.kf-portal__panel.is-active {
+	display: block;
+}
+
+.kf-portal__subheading {
+	margin: 1.5rem 0 0.75rem;
+	font-size: 1.1rem;
+}
+
+.kf-portal__subheading:first-child {
+	margin-top: 0;
+}
+
+.kf-portal__table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.95rem;
+}
+
+.kf-portal__table th,
+.kf-portal__table td {
+	border: 1px solid #d0d5dd;
+	padding: 0.5rem 0.65rem;
+	text-align: left;
+	vertical-align: top;
+}
+
+.kf-portal__table thead th {
+	background: #f0f2f5;
+}
+
+.kf-portal__empty {
+	color: #555;
+	font-style: italic;
+}
+
+.kf-portal--guest {
+	padding: 1rem;
+	background: #fcf9e8;
+	border: 1px solid #dba617;
+	border-radius: 4px;
+}
+
+.kf-portal__pay {
+	font: inherit;
+	cursor: pointer;
+	padding: 0.35rem 0.75rem;
+	background: #2271b1;
+	color: #fff;
+	border: none;
+	border-radius: 4px;
+}
+
+.kf-portal__pay:hover:not( :disabled ) {
+	background: #135e96;
+}
+
+.kf-portal__pay:disabled {
+	opacity: 0.75;
+	cursor: wait;
+}
+
+.kf-portal__dash {
+	color: #888;
+}
+
+.kf-portal__pet-compliance {
+	list-style: none;
+	margin: 0 0 1.25rem;
+	padding: 0;
+}
+
+.kf-portal__pet-compliance-item {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	gap: 0.5rem 0.75rem;
+	margin-bottom: 0.5rem;
+}
+
+.kf-portal__pet-name {
+	font-weight: 600;
+}
+
+.kf-portal__badge {
+	display: inline-block;
+	font-size: 0.8rem;
+	font-weight: 600;
+	padding: 0.15rem 0.5rem;
+	border-radius: 4px;
+	line-height: 1.3;
+}
+
+.kf-portal__badge--healthy {
+	background: #e7f5e9;
+	color: #1d6b2f;
+	border: 1px solid #b8e0c0;
+}
+
+.kf-portal__badge--action {
+	background: #fcf0f0;
+	color: #8b2b2b;
+	border: 1px solid #e8b4b4;
+}
+
+.kf-portal__badge--pending {
+	background: #fff8e5;
+	color: #8a6d1d;
+	border: 1px solid #e8d48b;
+}
+
+.kf-portal__compliance-detail {
+	width: 100%;
+	flex-basis: 100%;
+	margin-top: 0.5rem;
+	padding: 0.65rem 0.75rem;
+	background: #fafbfc;
+	border: 1px solid #e2e6eb;
+	border-radius: 4px;
+	font-size: 0.9rem;
+}
+
+.kf-portal__compliance-summary {
+	margin: 0 0 0.5rem;
+	line-height: 1.45;
+}
+
+.kf-portal__compliance-vaccines {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.kf-portal__compliance-vaccine-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4rem 0.75rem;
+	margin-bottom: 0.4rem;
+}
+
+.kf-portal__compliance-vaccine-row:last-child {
+	margin-bottom: 0;
+}
+
+.kf-portal__compliance-vaccine-name {
+	font-weight: 600;
+	min-width: 5rem;
+}
+
+.kf-portal__compliance-vaccine-actions {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
+.kf-portal__btn-upload {
+	font: inherit;
+	cursor: pointer;
+	padding: 0.2rem 0.55rem;
+	font-size: 0.85rem;
+	line-height: 1.3;
+}
+
+.kf-portal__compliance-file {
+	position: absolute;
+	width: 0;
+	height: 0;
+	opacity: 0;
+	overflow: hidden;
+}
+
+.kf-portal__pay-hint {
+	font-size: 0.85rem;
+	color: #8b2b2b;
+}
+
+/* Legal waivers / signature */
+.kf-waiver__liability {
+	margin-bottom: 1rem;
+	line-height: 1.5;
+}
+
+.kf-waiver__pet {
+	min-width: 12rem;
+	margin-left: 0.35rem;
+}
+
+.kf-waiver__signed-msg {
+	font-weight: 600;
+	color: #1d6b2f;
+}
+
+.kf-waiver__pad-wrap {
+	border: 1px solid #d0d5dd;
+	border-radius: 4px;
+	background: #fff;
+	max-width: 100%;
+	margin: 0.75rem 0;
+}
+
+.kf-waiver__canvas {
+	display: block;
+	width: 100%;
+	height: 200px;
+	touch-action: none;
+	cursor: crosshair;
+}
+
+.kf-waiver__actions .button {
+	margin-right: 0.5rem;
+}
+
+.kf-waiver__msg {
+	margin-top: 0.75rem;
+	padding: 0.5rem 0.75rem;
+	border-radius: 4px;
+}
+
+.kf-waiver__msg--ok {
+	background: #edfaef;
+	border: 1px solid #1d6b2f;
+	color: #0f3d18;
+}
+
+.kf-waiver__msg--err {
+	background: #fcf0f0;
+	border: 1px solid #c00;
+	color: #600;
+}

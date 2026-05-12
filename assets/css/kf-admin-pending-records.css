@@ -1,0 +1,27 @@
+/* KennelFlow — Pending Records admin screen */
+.kf-pending-records__table {
+	margin-top: 1rem;
+	max-width: 960px;
+}
+
+.kf-pending-records__detail[hidden] {
+	display: none !important;
+}
+
+.kf-pending-records__panel {
+	padding: 0.75rem 0;
+}
+
+.kf-pending-records__panel .button {
+	margin-right: 0.35rem;
+}
+
+.kf-pending-records__warn {
+	color: #996800;
+}
+
+.kf-pending-records__msg {
+	color: #b32d2e;
+	font-weight: 600;
+	min-height: 1.25rem;
+}

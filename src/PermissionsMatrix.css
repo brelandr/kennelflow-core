@@ -1,0 +1,52 @@
+.kf-permissions-matrix-root {
+	margin-top: 1em;
+}
+
+.kf-permissions-matrix__scroll {
+	overflow-x: auto;
+	max-width: 100%;
+}
+
+.kf-permissions-matrix__table {
+	min-width: 480px;
+	table-layout: fixed;
+}
+
+.kf-permissions-matrix__cap-col {
+	width: 220px;
+}
+
+.kf-permissions-matrix__role-col {
+	text-align: center;
+	font-weight: 600;
+}
+
+.kf-permissions-matrix__cap-label {
+	font-weight: 600;
+	vertical-align: middle;
+}
+
+.kf-permissions-matrix__cell {
+	text-align: center;
+	vertical-align: middle;
+}
+
+.kf-permissions-matrix__checkbox {
+	margin: 0;
+	cursor: pointer;
+}
+
+.kf-permissions-matrix__checkbox:disabled {
+	cursor: wait;
+	opacity: 0.85;
+}
+
+.kf-permissions-matrix__notice {
+	margin-bottom: 12px;
+}
+
+.kf-permissions-matrix__loading,
+.kf-permissions-matrix__empty {
+	font-size: 14px;
+	margin: 1em 0;
+}

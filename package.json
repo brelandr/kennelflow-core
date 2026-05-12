@@ -1,0 +1,26 @@
+{
+	"name": "kennelflow-core",
+	"version": "0.2.6",
+	"private": true,
+	"description": "KennelFlow Core — WordPress plugin build tooling",
+	"scripts": {
+		"build": "wp-scripts build",
+		"start": "wp-scripts start",
+		"test:e2e": "playwright test",
+		"test:e2e:ui": "playwright test --ui",
+		"test:e2e:headed": "playwright test --headed"
+	},
+	"devDependencies": {
+		"@playwright/test": "^1.49.1",
+		"@woocommerce/dependency-extraction-webpack-plugin": "^2.2.0",
+		"@wordpress/scripts": "^30.0.0"
+	},
+  "dependencies": {
+    "@tanstack/react-query": "^5.62.0",
+    "@wordpress/api-fetch": "^7.43.0",
+    "@wordpress/data": "^10.43.0",
+    "@wordpress/element": "^6.43.0",
+    "@wordpress/i18n": "^6.16.0",
+    "luxon": "^3.5.0"
+  }
+}

@@ -1,0 +1,171 @@
+# ⚙️ PROJECT CONFIGURATION — KennelFlow Core (Hub)
+# ==============================================================================
+# COMPONENT           VALUE
+# -----------------   -----------------------------------------------------------
+# Plugin Name:        KennelFlow Core
+# Plugin Slug:        kennelflow-core
+# Text Domain:        kennelflow-core
+# Function Prefix:    ltkf_
+# Class Prefix:       LTKF_
+# Constant Prefix:    LTKF_
+# Hook Prefix:        ltkf_
+# Role:                Hub — required foundation for all KennelFlow add-ons (KennelFlow Boarding, KennelFlow Vet, etc.)
+# ==============================================================================
+
+# ⚠️ CRITICAL CONTEXT
+
+# You are an expert WordPress Plugin Developer and Security Architect.
+# **First** verify you are editing **KennelFlow Core** (this repo), not an add-on.
+
+# 📂 Directory Identification:
+# - Path contains: `kennelflow-core/` → 🔵 **CORE (Hub)** — owns shared CPTs, user↔pet mapping, bootstrap contracts.
+# - Path contains: `kennelflow-boarding/`, `kennelflow-vet/` (sibling add-ons) → **Spokes** — must not duplicate Hub-owned post types; depend on Core.
+
+# ⛔ HUB RULES (CORE)
+# 1. **All** shared domain objects (pets, locations as defined by Core) are registered **only** in Core unless a filter explicitly delegates.
+# 2. Add-ons MUST check `LTKF_CORE_VERSION` (or `ltkf_is_core_active()`) before loading; if absent, admin notice + **do not** bootstrap.
+# 3. Use **strict** prefixes: `ltkf_` functions, `LTKF_` classes, `ltkf_` action/filter names.
+# 4. Do **not** bundle commercial licensing or spoke-specific UIs in Core — keep the Hub thin and stable.
+
+# 📝 Reporting Requirement:
+# At the end of code generation, append: "✅ **Context: KennelFlow Core (Hub)**"
+
+---
+
+# 🛡️ SECTION 1: PHP SECURITY & COMPLIANCE
+
+## A. Golden Nonce (admin POST/AJAX)
+* Verify nonce **first**; sanitize `$_POST` values **inside** `wp_verify_nonce` / dedicated sanitization.
+
+## B. Data Hygiene
+* Input: `sanitize_text_field`, `map_deep`, `absint`, `esc_url_raw` as appropriate.
+* Output: `esc_html`, `esc_attr`, `esc_url`.
+* Database: `$wpdb->prepare` or APIs (`WP_Query`, `update_user_meta`).
+
+## C. Rejection Blacklist
+* No `extract()`, `eval()`, `curl_init()`, `date()` for WordPress time — use `gmdate()` / `wp_date()`.
+
+---
+
+# 🏗️ SECTION 2: CODING STANDARDS (WPCS)
+
+1. **Tabs** for indentation.
+2. **Yoda** conditions where applicable.
+3. **Text domain:** `kennelflow-core` only.
+4. **Hooks:** `do_action( 'ltkf_core_init' )`, `apply_filters( 'ltkf_pet_capability_args', $args )` — always `ltkf_` prefix.
+
+---
+
+# 🏛️ SECTION 3: HUB & SPOKE ARCHITECTURE
+
+## A. Hub Responsibilities (this plugin)
+* Register **`kf_pet`** and **`kf_location`** CPTs (unified from legacy KennelPress / KennelFlow Vet pet + location concepts).
+* **User ↔ pet mapping:** `user_meta` `kf_owner_pet_ids` (array of pet post IDs) synced with post meta `kf_owner_user_id` on `kf_pet`.
+* Public API: `ltkf_is_core_active()`, actions `ltkf_core_init`, `ltkf_core_registered_content`.
+
+## B. Spoke Responsibilities (add-ons)
+* Require Core; extend via `ltkf_*` / `LTKF_*` filters, or register **additional** CPTs/taxonomies that **reference** `kf_pet` / `kf_location` by ID.
+* Do **not** register duplicate hub `kf_*` post type slugs.
+
+## C. Migration Note
+* Legacy plugins used `kennelpress_pet` / legacy vet pet slugs and location **taxonomies**; migration to Hub CPTs is a separate migration project — document in spoke readmes.
+
+---
+
+# ⚡ SECTION 4: SMART COMMANDS
+
+* **"@Audit"**: Nonce, SQLi, unsanitized input, missing escapes.
+* **"@Hook"**: Suggest `do_action` / `apply_filters` for spoke extensibility.
+
+---
+
+# 📦 SECTION 5: DEPLOYMENT
+
+```bash
+zip -r kennelflow-core.zip . \
+  -x "*/.cursorrules" -x "*/.cursor/*" \
+  -x "*/.git/*" -x "*/.github/*" \
+  -x "*/node_modules/*" -x "*/.DS_Store" \
+  -x "*/vendor/*" \
+  -x "*.zip" -x "*.sh" -x "*.md"
+```
+
+---
+
+# 🔍 SECTION 6: WP.ORG AUDITOR SPECIFIC REQUIREMENTS
+- **No Direct Access:** Every PHP file (except main loader) MUST start with: `if ( ! defined( 'ABSPATH' ) ) exit;`
+- **Asset Loading:** Use `wp_enqueue_script` and `wp_enqueue_style`. Never hardcode `<script>` or `<link>` tags in the header/footer. 
+- **Remote Requests:** Use `wp_safe_remote_get` and `wp_safe_remote_post`. Never use `curl` or `file_get_contents` for external URLs.
+- **Strict Prefixing:** Prefix ALL:
+    - Global variables
+    - Function names
+    - Class names
+    - Constant names
+    - Hook names (actions/filters)
+    - Database Option names
+    - Transient names
+- **I18n:** Ensure the text domain `kennelflow-core` is applied to every string. Use `esc_html_e()` for echoed translations.
+
+---
+
+GENERAL: Follow WordPress Coding Standards. Assume Intelephense WordPress stubs.
+
+---
+
+# WordPress.org Plugin Repository Compliance Rules
+
+## 1. Metadata, Author & Contributors
+- **Author Header:** In the main plugin file, the `Author:` field should be your name or company (e.g., "Randy Breland" or "Land Tech Web Designs, Corp").
+- **Contributors List:** In `readme.txt`, the `Contributors:` field MUST include your WordPress.org username: **brelandr**.
+- **Requirement:** Ensure **brelandr** is present in both locations to link the plugin to your profile properly.
+
+## 2. Code Readability & Asset Management
+- **Minified Files:** Never provide minified JS/CSS (e.g., in `assets/dist/`) without including the unminified source code in the plugin folder.
+- **Source Links:** If using build tools (npm/webpack), the `readme.txt` MUST contain a link to the public source repository (e.g., GitHub) where the unminified code resides.
+
+## 3. Unique Prefixing (Anti-Collision)
+- **Global Namespace:** All functions, classes, constants, and global variables must be prefixed with a unique identifier (at least 4 characters).
+- **Consolidate Prefixes:** Hub code uses `ltkf_*` only; do not reintroduce legacy `vetpress_*` in Core. Spokes each publish their own prefixes (see their `.cursorrules`).
+- **Reserved Prefixes:** Never use `wp_`, `_`, or `__` as a prefix for custom functions.
+- **Naming Examples:**
+  - `knlv_save_data()`
+  - `KNLV_PLUGIN_DIR`
+  - `update_option('knlv_settings', ...)`
+
+## 4. Database Security (SQL Injection)
+- **Strict Requirement:** Every database query using `$wpdb` MUST be wrapped in `$wpdb->prepare()`.
+- **Example:** 
+  $wpdb->query($wpdb->prepare("UPDATE `$table` SET col = %s WHERE id = %d", $val, $id));
+
+## 5. Development Standards
+- **Function Checks:** Avoid `if (!function_exists('...'))` for plugin-specific functions; use unique names/namespaces instead.
+- **Standard Adherence:** Maintain compliance with [WordPress Detailed Plugin Guidelines](https://developer.wordpress.org/plugins/wordpress-org/detailed-plugin-guidelines/).
+
+---
+
+# ⚖️ SECTION 8: WORDPRESS.ORG STRICT GUIDELINES COMPLIANCE
+# Maps directly to the Detailed Plugin Guidelines to prevent review rejection.
+
+## A. Licensing & Third-Party Assets (Guideline 1 & 8)
+* **GPL Compatibility:** ALL code, including third-party libraries, JS dependencies, CSS frameworks, fonts, and icons, MUST be GPL-compatible.
+* **No External CDNs:** Do NOT load scripts, styles, or fonts from external CDNs (e.g., `cdnjs`, `jsdelivr`, `googleapis`). ALL assets must be downloaded and bundled locally within the plugin's `assets/` directory.
+* **No Remote Execution:** The plugin must not execute remote code or download executable code from external servers.
+
+## B. User Tracking & Consent (Guideline 7 & 17)
+* **Strict Opt-In Telemetry:** Do NOT include any user tracking, telemetry, or "phone home" scripts (even for error reporting) unless it is wrapped in an explicit, **default-off** user opt-in mechanism.
+* **No Spam:** Do NOT auto-subscribe users to mailing lists. 
+
+## C. Admin UI & Notices (Guideline 11)
+* **Dismissible Notices:** Any admin notices (`admin_notices` hook) MUST be dismissible by the user. Include logic to save the dismissed state (e.g., via user meta) so it does not reappear on every page load.
+* **No UI Hijacking:** Do NOT hide default WordPress dashboard elements, menus, or core functionality. 
+* **Settings Links:** Place settings pages in standard locations (e.g., under Settings, Tools, or a dedicated top-level menu). Do not create intrusive top-level menus if a sub-menu suffices.
+
+## D. Frontend Credits (Guideline 10)
+* **No Hidden Links:** Do NOT inject "Powered by KennelFlow" credits, affiliate links, or developer signatures into the frontend output (footer, widget, shortcode output) without explicit user permission. If included, it MUST be disabled by default and require the user to opt-in via settings.
+
+## E. Trialware & Feature Locking (Guideline 5 & 6)
+* **Fully Functional Free Version:** The plugin hosted on WordPress.org MUST be fully functional. Do not include arbitrary limits (e.g., "Only 10 bookings allowed in the free version") or "trial" periods that disable functionality after a certain timeframe. 
+* **Upsells:** Upsells to a premium/Pro version are allowed in the admin UI, but they must be clearly marked and not intrusive to the user's workflow.
+
+## F. Cleanup & Uninstallation (General WP Best Practice)
+* **Uninstall Routine:** The plugin MUST clean up after itself. Ensure the presence of an `uninstall.php` file that removes custom database tables, options, and transients when the user deletes the plugin.

@@ -1,0 +1,173 @@
+/**
+ * Pet Report Card — mobile-first admin UI.
+ */
+
+.kf-report-card-wrap {
+	max-width: 640px;
+}
+
+.kf-report-card-root {
+	margin-top: 1rem;
+}
+
+.kf-rc-app {
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, sans-serif;
+	font-size: 16px;
+	line-height: 1.45;
+	color: #1e293b;
+}
+
+.kf-rc-banner {
+	padding: 0.75rem 1rem;
+	border-radius: 8px;
+	margin-bottom: 1rem;
+	border: 1px solid #cbd5e1;
+	background: #f8fafc;
+}
+
+.kf-rc-banner--error {
+	border-color: #f87171;
+	background: #fef2f2;
+	color: #991b1b;
+}
+
+.kf-rc-banner--ok {
+	border-color: #4ade80;
+	background: #f0fdf4;
+	color: #166534;
+}
+
+.kf-rc-field {
+	margin-bottom: 1.25rem;
+}
+
+.kf-rc-label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 0.35rem;
+	font-size: 0.95rem;
+}
+
+.kf-rc-select,
+.kf-rc-notes {
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
+	padding: 0.65rem 0.75rem;
+	font-size: 1rem;
+	border: 1px solid #cbd5e1;
+	border-radius: 8px;
+	background: #fff;
+	min-height: 48px;
+}
+
+.kf-rc-notes {
+	min-height: 120px;
+	resize: vertical;
+}
+
+.kf-rc-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.kf-rc-tag {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	padding: 0.35rem 0.85rem;
+	font-size: 0.95rem;
+	border: 2px solid #e2e8f0;
+	border-radius: 999px;
+	background: #fff;
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+	user-select: none;
+}
+
+.kf-rc-tag[aria-pressed='true'] {
+	border-color: #2563eb;
+	background: #eff6ff;
+	color: #1d4ed8;
+	font-weight: 600;
+}
+
+.kf-rc-photo {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	max-width: 100%;
+	min-height: 160px;
+	border: 2px dashed #94a3b8;
+	border-radius: 12px;
+	padding: 1rem;
+	box-sizing: border-box;
+	background: #f1f5f9;
+	cursor: pointer;
+	text-align: center;
+	font-weight: 500;
+	color: #475569;
+}
+
+.kf-rc-photo-input {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	opacity: 0;
+	cursor: pointer;
+	font-size: 0;
+}
+
+.kf-rc-photo-prompt {
+	pointer-events: none;
+}
+
+.kf-rc-photo-preview {
+	margin-top: 0.75rem;
+	border-radius: 12px;
+	overflow: hidden;
+	max-height: 280px;
+	object-fit: cover;
+	width: 100%;
+}
+
+.kf-rc-submit {
+	width: 100%;
+	min-height: 52px;
+	font-size: 1.05rem;
+	font-weight: 600;
+	padding: 0.75rem 1rem;
+	border: none;
+	border-radius: 10px;
+	background: #2563eb;
+	color: #fff;
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.kf-rc-submit:disabled {
+	opacity: 0.65;
+	cursor: not-allowed;
+}
+
+.kf-rc-muted {
+	color: #64748b;
+	font-size: 0.9rem;
+	margin: 0.5rem 0 0;
+}
+
+.kf-rc-sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}

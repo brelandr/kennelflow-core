@@ -1,0 +1,64 @@
+/* Demo Data Sandbox — large, clear sections */
+.kf-demo-data-wrap {
+	max-width: 960px;
+}
+
+.kf-demo-data-section {
+	margin: 2rem 0;
+	padding: 2rem 2.5rem;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	background: #fff;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.kf-demo-data-section h2 {
+	margin-top: 0;
+	font-size: 1.5rem;
+}
+
+.kf-demo-data-section--generate {
+	border-left: 4px solid #2271b1;
+}
+
+.kf-demo-data-section--nuke {
+	border-left: 4px solid #d63638;
+}
+
+.kf-demo-data-scale {
+	font-size: 1rem;
+	min-width: 280px;
+	padding: 0.5rem 0.75rem;
+}
+
+.kf-demo-data-button-danger {
+	background: #d63638 !important;
+	border-color: #d63638 #b32d2e #b32d2e !important;
+	color: #fff !important;
+	box-shadow: 0 1px 0 #b32d2e !important;
+	text-shadow: none !important;
+}
+
+.kf-demo-data-button-danger:hover,
+.kf-demo-data-button-danger:focus {
+	background: #b32d2e !important;
+	border-color: #8a2424 !important;
+	color: #fff !important;
+}
+
+.kf-demo-data-status {
+	margin-top: 1rem;
+	padding: 0.75rem 1rem;
+	background: #f0f0f1;
+	border-radius: 4px;
+}
+
+.kf-demo-data-status.is-error {
+	background: #fcf0f1;
+	border-left: 4px solid #d63638;
+}
+
+.kf-demo-data-status.is-success {
+	background: #edfaef;
+	border-left: 4px solid #00a32a;
+}
