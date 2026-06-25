@@ -85,7 +85,7 @@ class AutomatedCrm {
 	 */
 	public static function run_sweep() {
 		$table = ltkf_medical_records_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return;
 		}
 
@@ -98,8 +98,8 @@ class AutomatedCrm {
 		}
 
 		try {
-			$utc = new DateTimeImmutable( 'now', new DateTimeZone( 'UTC' ) );
-		} catch ( Exception $e ) {
+			$utc = new \DateTimeImmutable( 'now', new \DateTimeZone( 'UTC' ) );
+		} catch ( \Exception $e ) {
 			unset( $e );
 			return;
 		}
@@ -124,19 +124,30 @@ class AutomatedCrm {
 
 		$exclude = ltkf_medical_records_where_not_archived_for_prepare();
 
-		$sql  = "SELECT * FROM `{$table}` WHERE `expiration_gmt` IS NOT NULL AND DATE( `expiration_gmt` ) = %s";
-		$args = array( $target_date );
-
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- `%i` table validated; Data Vault `$exclude`.
 		if ( '' !== $exclude['sql'] ) {
-			$sql .= $exclude['sql'];
-			$args = array_merge( $args, (array) $exclude['value'] );
+			$ex_vals = (array) $exclude['value'];
+			$xa      = isset( $ex_vals[0] ) ? (string) $ex_vals[0] : '';
+			$xb      = isset( $ex_vals[1] ) ? (string) $ex_vals[1] : '';
+			$rows    = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT * FROM %i WHERE `expiration_gmt` IS NOT NULL AND DATE( `expiration_gmt` ) = %s AND ( `status` IS NULL OR ( `status` <> %s AND `status` <> %s ) )',
+					$table,
+					$target_date,
+					$xa,
+					$xb
+				)
+			);
+		} else {
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT * FROM %i WHERE `expiration_gmt` IS NOT NULL AND DATE( `expiration_gmt` ) = %s',
+					$table,
+					$target_date
+				)
+			);
 		}
-
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Built above with $wpdb->prepare.
-		$prepared = call_user_func_array( array( $wpdb, 'prepare' ), array_merge( array( $sql ), $args ) );
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching -- Nightly CRM batch.
-		$rows = $wpdb->get_results( $prepared );
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 		if ( ! is_array( $rows ) || empty( $rows ) ) {
 			return;
@@ -191,7 +202,7 @@ class AutomatedCrm {
 		}
 
 		$table = ltkf_medical_records_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return;
 		}
 
@@ -207,19 +218,32 @@ class AutomatedCrm {
 
 		$exclude = ltkf_medical_records_where_not_archived_for_prepare();
 
-		$sql  = "SELECT * FROM `{$table}` WHERE `expiration_gmt` IS NOT NULL AND DATE( `expiration_gmt` ) = %s AND `pet_post_id` = %d";
-		$args = array( $target_date, $pet_id );
-
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- `%i` validated; `$exclude`.
 		if ( '' !== $exclude['sql'] ) {
-			$sql .= $exclude['sql'];
-			$args = array_merge( $args, (array) $exclude['value'] );
+			$ex_vals = (array) $exclude['value'];
+			$xa      = isset( $ex_vals[0] ) ? (string) $ex_vals[0] : '';
+			$xb      = isset( $ex_vals[1] ) ? (string) $ex_vals[1] : '';
+			$rows    = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT * FROM %i WHERE `expiration_gmt` IS NOT NULL AND DATE( `expiration_gmt` ) = %s AND `pet_post_id` = %d AND ( `status` IS NULL OR ( `status` <> %s AND `status` <> %s ) )',
+					$table,
+					$target_date,
+					$pet_id,
+					$xa,
+					$xb
+				)
+			);
+		} else {
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT * FROM %i WHERE `expiration_gmt` IS NOT NULL AND DATE( `expiration_gmt` ) = %s AND `pet_post_id` = %d',
+					$table,
+					$target_date,
+					$pet_id
+				)
+			);
 		}
-
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Built above with $wpdb->prepare.
-		$prepared = call_user_func_array( array( $wpdb, 'prepare' ), array_merge( array( $sql ), $args ) );
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching -- Async CRM row load.
-		$rows = $wpdb->get_results( $prepared );
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 		if ( ! is_array( $rows ) || empty( $rows ) ) {
 			return;
@@ -395,7 +419,7 @@ class AutomatedCrm {
 			null,
 			array(
 				'ltkf_medical_record_id' => $record_id,
-				'message'              => $message,
+				'message'                => $message,
 			),
 			0
 		);

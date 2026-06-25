@@ -153,7 +153,9 @@ class AdminUserMultiRoles {
 		$allowed  = is_array( $editable ) ? array_keys( $editable ) : array();
 		$allowed  = array_filter( array_map( 'sanitize_key', $allowed ) );
 
-		$raw_extras = isset( $_POST[ self::POST_FIELD ] ) ? wp_unslash( $_POST[ self::POST_FIELD ] ) : array();
+		$raw_extras = isset( $_POST[ self::POST_FIELD ] )
+			? map_deep( wp_unslash( $_POST[ self::POST_FIELD ] ), 'sanitize_text_field' )
+			: array();
 		$extras     = array_map( 'sanitize_key', (array) $raw_extras );
 		$extras     = array_intersect( $extras, $allowed );
 

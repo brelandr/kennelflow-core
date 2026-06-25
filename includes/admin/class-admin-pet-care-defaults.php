@@ -308,9 +308,11 @@ class AdminPetCareDefaults {
 	}
 
 	/**
-	 * Verify meta box nonce.
+	 * Verify meta box nonce (save_post-safe: invalid/missing nonce returns false; never wp_die()).
 	 *
-	 * @param string $action Nonce action.
+	 * wp_die() on failure would abort the entire post save for autosave/REST requests that omit this nonce.
+	 *
+	 * @param string $action Nonce action string.
 	 * @param string $field  POST field.
 	 * @return bool
 	 */
@@ -323,6 +325,10 @@ class AdminPetCareDefaults {
 		$nonce = sanitize_text_field( wp_unslash( $_POST[ $field ] ) );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		return (bool) wp_verify_nonce( $nonce, $action );
+		if ( ! wp_verify_nonce( $nonce, $action ) ) {
+			return false;
+		}
+
+		return true;
 	}
 }

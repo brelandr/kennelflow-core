@@ -41,7 +41,7 @@ class PortalData {
 		}
 
 		$table = ltkf_bookings_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return array();
 		}
 
@@ -53,25 +53,26 @@ class PortalData {
 		$statuses     = array( 'pending', 'pending_payment', 'confirmed', 'checked_in' );
 		$st_ph        = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
 
-		$sql = "
+		$args = array_merge( array( $table, $wpdb->posts ), $pet_ids, array( $now ), $statuses );
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- `%i` tables validated; bounded IN lists.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				'
 			SELECT b.*, p.post_title AS booking_title
-			FROM {$table} AS b
-			LEFT JOIN {$wpdb->posts} AS p ON p.ID = b.post_id AND p.post_status NOT IN ( 'trash', 'auto-draft' )
-			WHERE b.pet_id IN ( {$placeholders} )
+			FROM %i AS b
+			LEFT JOIN %i AS p ON p.ID = b.post_id AND p.post_status NOT IN ( \'trash\', \'auto-draft\' )
+			WHERE b.pet_id IN ( ' . $placeholders . ' )
 			AND b.end_gmt >= %s
-			AND b.status IN ( {$st_ph} )
-			AND ( b.booking_kind IN ( 'boarding', '' ) )
+			AND b.status IN ( ' . $st_ph . ' )
+			AND ( b.booking_kind IN ( \'boarding\', \'\' ) )
 			ORDER BY b.start_gmt ASC
 			LIMIT 100
-		";
-
-		$args = array_merge( $pet_ids, array( $now ), $statuses );
-
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- IN lists from fixed-length arrays.
-		$prepared = $wpdb->prepare( $sql, $args );
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching -- Owner portal; small bounded result sets.
-		$rows = $wpdb->get_results( $prepared );
+		',
+				...$args
+			)
+		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 		return is_array( $rows ) ? $rows : array();
 	}
@@ -89,7 +90,7 @@ class PortalData {
 		}
 
 		$table = ltkf_medical_records_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return array();
 		}
 
@@ -99,25 +100,41 @@ class PortalData {
 
 		$exclude = ltkf_medical_records_where_not_archived_for_prepare();
 
-		$sql = "
+		$args_base = array_merge( array( $table ), $pet_ids );
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- `%i`; archived fragment matches `ltkf_medical_records_where_not_archived_for_prepare()`.
+		if ( '' !== $exclude['sql'] ) {
+			$ex_vals = (array) $exclude['value'];
+			$xa      = isset( $ex_vals[0] ) ? (string) $ex_vals[0] : '';
+			$xb      = isset( $ex_vals[1] ) ? (string) $ex_vals[1] : '';
+			$rows    = $wpdb->get_results(
+				$wpdb->prepare(
+					'
 			SELECT *
-			FROM {$table}
-			WHERE pet_post_id IN ( {$placeholders} )
-			{$exclude['sql']}
+			FROM %i
+			WHERE pet_post_id IN ( ' . $placeholders . ' )
+			AND ( `status` IS NULL OR ( `status` <> %s AND `status` <> %s ) )
 			ORDER BY COALESCE( reported_gmt, collected_gmt, created_gmt ) DESC, id DESC
 			LIMIT 200
-		";
-
-		$args = $pet_ids;
-		if ( '' !== $exclude['sql'] ) {
-			$args = array_merge( $args, (array) $exclude['value'] );
+		',
+					...array_merge( $args_base, array( $xa, $xb ) )
+				)
+			);
+		} else {
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					'
+			SELECT *
+			FROM %i
+			WHERE pet_post_id IN ( ' . $placeholders . ' )
+			ORDER BY COALESCE( reported_gmt, collected_gmt, created_gmt ) DESC, id DESC
+			LIMIT 200
+		',
+					...$args_base
+				)
+			);
 		}
-
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-		$prepared = call_user_func_array( array( $wpdb, 'prepare' ), array_merge( array( $sql ), $args ) );
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching -- Owner portal; small bounded result sets.
-		$rows = $wpdb->get_results( $prepared );
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 		return is_array( $rows ) ? $rows : array();
 	}
@@ -172,7 +189,7 @@ class PortalData {
 		}
 
 		$table = ltkf_medical_records_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return null;
 		}
 
@@ -182,25 +199,41 @@ class PortalData {
 
 		$exclude = ltkf_medical_records_where_not_archived_for_prepare();
 
-		$sql = "
-			SELECT *
-			FROM {$table}
-			WHERE id = %d
-			AND pet_post_id IN ( {$placeholders} )
-			{$exclude['sql']}
-			LIMIT 1
-		";
+		$args_base = array_merge( array( $table, $record_id ), $pet_ids );
 
-		$args = array_merge( array( $record_id ), $pet_ids );
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- `%i`; archived fragment matches helper.
 		if ( '' !== $exclude['sql'] ) {
-			$args = array_merge( $args, (array) $exclude['value'] );
+			$ex_vals = (array) $exclude['value'];
+			$xa      = isset( $ex_vals[0] ) ? (string) $ex_vals[0] : '';
+			$xb      = isset( $ex_vals[1] ) ? (string) $ex_vals[1] : '';
+			$row     = $wpdb->get_row(
+				$wpdb->prepare(
+					'
+			SELECT *
+			FROM %i
+			WHERE id = %d
+			AND pet_post_id IN ( ' . $placeholders . ' )
+			AND ( `status` IS NULL OR ( `status` <> %s AND `status` <> %s ) )
+			LIMIT 1
+		',
+					...array_merge( $args_base, array( $xa, $xb ) )
+				)
+			);
+		} else {
+			$row = $wpdb->get_row(
+				$wpdb->prepare(
+					'
+			SELECT *
+			FROM %i
+			WHERE id = %d
+			AND pet_post_id IN ( ' . $placeholders . ' )
+			LIMIT 1
+		',
+					...$args_base
+				)
+			);
 		}
-
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-		$prepared = call_user_func_array( array( $wpdb, 'prepare' ), array_merge( array( $sql ), $args ) );
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching -- Owner portal; single-row ownership check.
-		$row = $wpdb->get_row( $prepared );
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
 
 		return is_object( $row ) ? $row : null;
 	}
@@ -225,7 +258,7 @@ class PortalData {
 		}
 
 		$table = ltkf_bookings_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return null;
 		}
 
@@ -233,21 +266,22 @@ class PortalData {
 
 		$placeholders = implode( ',', array_fill( 0, count( $pet_ids ), '%d' ) );
 
-		$sql = "
+		$args = array_merge( array( $table, $booking_post_id ), $pet_ids );
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- `%i`; IN list matches pet IDs.
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				'
 			SELECT *
-			FROM {$table}
+			FROM %i
 			WHERE post_id = %d
-			AND pet_id IN ( {$placeholders} )
+			AND pet_id IN ( ' . $placeholders . ' )
 			LIMIT 1
-		";
-
-		$args = array_merge( array( $booking_post_id ), $pet_ids );
-
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- IN list from fixed pet IDs.
-		$prepared = $wpdb->prepare( $sql, $args );
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching -- Owner portal; ownership check.
-		$row = $wpdb->get_row( $prepared );
+		',
+				...$args
+			)
+		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
 
 		return is_object( $row ) ? $row : null;
 	}

@@ -46,7 +46,7 @@ class PublicCliniciansApi {
 			self::REST_NAMESPACE,
 			self::ROUTE,
 			array(
-				'methods'             => WP_REST_Server::READABLE,
+				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( __CLASS__, 'get_items' ),
 				'permission_callback' => array( __CLASS__, 'permission_public_clinicians' ),
 				'args'                => array(
@@ -98,7 +98,7 @@ class PublicCliniciansApi {
 		}
 
 		$loc_pt = function_exists( 'ltkf_get_location_post_type' ) ? ltkf_get_location_post_type() : 'kf_location';
-		if ( $loc_pt !== get_post_type( $location_id ) ) {
+		if ( get_post_type( $location_id ) !== $loc_pt ) {
 			return new \WP_Error(
 				'rest_invalid_param',
 				__( 'location_id does not refer to a valid location.', 'kennelflow-core' ),
@@ -111,6 +111,18 @@ class PublicCliniciansApi {
 
 		if ( empty( $role_slugs ) ) {
 			return rest_ensure_response( array() );
+		}
+
+		$cache_payload = array(
+			'location_id' => $location_id,
+			'roles'       => array_values( $role_slugs ),
+			'locale'      => get_locale(),
+		);
+		$cache_json    = wp_json_encode( $cache_payload );
+		$cache_key     = 'kennelflow_core_pub_clinicians_' . md5( false !== $cache_json ? $cache_json : '' );
+		$cached        = get_transient( $cache_key );
+		if ( false !== $cached && is_array( $cached ) ) {
+			return rest_ensure_response( $cached );
 		}
 
 		$users = get_users(
@@ -202,6 +214,8 @@ class PublicCliniciansApi {
 
 			$out[] = $safe;
 		}
+
+		set_transient( $cache_key, $out, DAY_IN_SECONDS );
 
 		return rest_ensure_response( $out );
 	}

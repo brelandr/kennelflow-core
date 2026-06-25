@@ -54,7 +54,7 @@ class BookingWizardRest {
 			'/locations',
 			array(
 				array(
-					'methods'             => WP_REST_Server::READABLE,
+					'methods'             => \WP_REST_Server::READABLE,
 					'callback'            => array( $loc_ctrl, 'get_items' ),
 					'permission_callback' => array( $loc_ctrl, 'get_items_permissions_check' ),
 					'args'                => $loc_ctrl->get_collection_params(),
@@ -67,7 +67,7 @@ class BookingWizardRest {
 			'/me/pets',
 			array(
 				array(
-					'methods'             => WP_REST_Server::READABLE,
+					'methods'             => \WP_REST_Server::READABLE,
 					'callback'            => array( __CLASS__, 'get_me_pets' ),
 					'permission_callback' => array( __CLASS__, 'me_pets_permission' ),
 				),
@@ -79,7 +79,7 @@ class BookingWizardRest {
 			'/availability',
 			array(
 				array(
-					'methods'             => WP_REST_Server::READABLE,
+					'methods'             => \WP_REST_Server::READABLE,
 					'callback'            => array( __CLASS__, 'get_availability' ),
 					'permission_callback' => array( $avail, 'get_items_permissions_check' ),
 					'args'                => $avail->get_collection_params(),
@@ -92,7 +92,7 @@ class BookingWizardRest {
 			'/bookings',
 			array(
 				array(
-					'methods'             => WP_REST_Server::CREATABLE,
+					'methods'             => \WP_REST_Server::CREATABLE,
 					'callback'            => array( __CLASS__, 'create_booking' ),
 					'permission_callback' => array( self::get_bookings_controller(), 'permissions_create_booking' ),
 				),
@@ -129,7 +129,7 @@ class BookingWizardRest {
 			return rest_ensure_response( array( 'pets' => array() ) );
 		}
 
-		// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single user, small result set.
+		// phpcs:disable WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- REST /me/pets; current user + owner meta + posts_per_page 100 cap.
 		$query = new \WP_Query(
 			array(
 				'post_type'              => $pet_types,
@@ -147,6 +147,7 @@ class BookingWizardRest {
 				),
 			)
 		);
+		// phpcs:enable WordPress.DB.SlowDBQuery.slow_db_query_meta_query
 
 		$out = array();
 		foreach ( $query->posts as $post ) {

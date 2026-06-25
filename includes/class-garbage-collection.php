@@ -31,6 +31,9 @@ class GarbageCollection {
 	 */
 	public static function run() {
 		$table = ltkf_bookings_table_name();
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) ) {
+			return 0;
+		}
 		if ( ! ltkf_table_exists( $table ) ) {
 			return 0;
 		}
@@ -43,17 +46,18 @@ class GarbageCollection {
 
 		$cutoff = gmdate( 'Y-m-d H:i:s', time() - self::HOLD_MAX_AGE_SECONDS );
 
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- GC sweep; table name from helper.
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- GC sweep; `%i` bookings table validated above.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT post_id FROM {$table} WHERE status = %s AND created_gmt < %s AND created_gmt NOT IN (%s, %s)",
+				'SELECT post_id FROM %i WHERE status = %s AND created_gmt < %s AND created_gmt NOT IN (%s, %s)',
+				$table,
 				'pending_payment',
 				$cutoff,
 				'0000-00-00 00:00:00',
 				'1970-01-01 00:00:00'
 			)
 		);
-		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( ! is_array( $rows ) || empty( $rows ) ) {
 			return 0;
@@ -68,7 +72,7 @@ class GarbageCollection {
 
 			wp_delete_post( $post_id, true );
 
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Fallback if hooks did not remove index row.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Fallback if hooks did not remove index row; validated table identifier.
 			$wpdb->delete( $table, array( 'post_id' => $post_id ), array( '%d' ) );
 
 			++$count;
@@ -91,8 +95,8 @@ class GarbageCollection {
 
 		global $wpdb;
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Schema probe; validated table name.
-		$found = $wpdb->get_var( "SHOW COLUMNS FROM `{$table}` LIKE 'created_gmt'" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Schema probe; `%i` validated table identifier.
+		$found = $wpdb->get_var( $wpdb->prepare( 'SHOW COLUMNS FROM %i LIKE %s', $table, 'created_gmt' ) );
 
 		return null !== $found && '' !== $found;
 	}

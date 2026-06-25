@@ -223,15 +223,23 @@ class Waiver {
 	 * @return bool
 	 */
 	protected static function booking_row_is_boarding( $booking_post_id ) {
-		$table = ltkf_bookings_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		$booking_post_id = absint( $booking_post_id );
+		$table           = ltkf_bookings_table_name();
+		if ( $booking_post_id < 1 || ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return false;
 		}
 
 		global $wpdb;
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- KennelFlow ledger; table from helper.
-		$row = $wpdb->get_row( $wpdb->prepare( "SELECT booking_kind FROM {$table} WHERE post_id = %d LIMIT 1", $booking_post_id ) );
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- KennelFlow ledger; `%i` validated.
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				'SELECT booking_kind FROM %i WHERE post_id = %d LIMIT 1',
+				$table,
+				$booking_post_id
+			)
+		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( ! is_object( $row ) ) {
 			return false;
@@ -249,15 +257,23 @@ class Waiver {
 	 * @return int
 	 */
 	protected static function get_pet_id_for_booking_post( $booking_post_id ) {
-		$table = ltkf_bookings_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		$booking_post_id = absint( $booking_post_id );
+		$table           = ltkf_bookings_table_name();
+		if ( $booking_post_id < 1 || ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return 0;
 		}
 
 		global $wpdb;
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- KennelFlow ledger.
-		$pet_id = $wpdb->get_var( $wpdb->prepare( "SELECT pet_id FROM {$table} WHERE post_id = %d LIMIT 1", $booking_post_id ) );
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
+		$pet_id = $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT pet_id FROM %i WHERE post_id = %d LIMIT 1',
+				$table,
+				$booking_post_id
+			)
+		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		return absint( $pet_id );
 	}
@@ -294,7 +310,8 @@ class Waiver {
 	 * @return void
 	 */
 	public static function ajax_save_signature() {
-		if ( ! check_ajax_referer( self::NONCE_ACTION, '_wpnonce', false ) ) {
+		$nonce_value = isset( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
+		if ( '' === $nonce_value || ! wp_verify_nonce( $nonce_value, self::NONCE_ACTION ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid security token.', 'kennelflow-core' ) ), 403 );
 		}
 

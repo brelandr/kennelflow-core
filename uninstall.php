@@ -19,9 +19,9 @@ global $wpdb;
  * @return void
  */
 $ltkf_delete_options_for_site = static function () use ( $wpdb ) {
-	$like_options   = $wpdb->esc_like( 'ltkf_' ) . '%';
-	$like_trans     = $wpdb->esc_like( '_transient_ltkf_' ) . '%';
-	$like_timeout   = $wpdb->esc_like( '_transient_timeout_ltkf_' ) . '%';
+	$like_options = $wpdb->esc_like( 'ltkf_' ) . '%';
+	$like_trans   = $wpdb->esc_like( '_transient_ltkf_' ) . '%';
+	$like_timeout = $wpdb->esc_like( '_transient_timeout_ltkf_' ) . '%';
 
 	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- uninstall cleanup.
 	$wpdb->query(
@@ -35,9 +35,9 @@ $ltkf_delete_options_for_site = static function () use ( $wpdb ) {
 };
 
 if ( is_multisite() ) {
-	$site_ids = get_sites( array( 'fields' => 'ids' ) );
-	foreach ( $site_ids as $site_id ) {
-		switch_to_blog( (int) $site_id );
+	$ltkf_site_ids = get_sites( array( 'fields' => 'ids' ) );
+	foreach ( $ltkf_site_ids as $ltkf_site_id ) {
+		switch_to_blog( (int) $ltkf_site_id );
 		$ltkf_delete_options_for_site();
 		restore_current_blog();
 	}

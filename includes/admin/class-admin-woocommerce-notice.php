@@ -152,7 +152,8 @@ class AdminWoocommerceNotice {
 	 * @return void
 	 */
 	public static function ajax_dismiss() {
-		if ( ! check_ajax_referer( self::NONCE_ACTION, '_wpnonce', false ) ) {
+		$nonce_value = isset( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
+		if ( '' === $nonce_value || ! wp_verify_nonce( $nonce_value, self::NONCE_ACTION ) ) {
 			wp_send_json_error(
 				array( 'message' => __( 'Invalid security token', 'kennelflow-core' ) ),
 				403

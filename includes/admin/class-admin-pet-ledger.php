@@ -250,14 +250,15 @@ class AdminPetLedger {
 
 		$limit = (int) apply_filters( 'ltkf_pet_ledger_medical_records_limit', 500 );
 		if ( count( $rows ) >= $limit ) {
-			printf(
-				'<p class="kf-ledger-muted">%s</p>',
+			echo '<p class="kf-ledger-muted">';
+			echo esc_html(
 				sprintf(
 					/* translators: %d: row limit */
-					esc_html__( 'Showing the %d most recent rows.', 'kennelflow-core' ),
-					$limit
+					__( 'Showing the %d most recent rows.', 'kennelflow-core' ),
+					absint( $limit )
 				)
 			);
+			echo '</p>';
 		}
 
 		echo '</div>';
@@ -274,7 +275,11 @@ class AdminPetLedger {
 			return $has;
 		}
 		$table = ltkf_medical_records_table_name();
-		$has   = ltkf_table_exists( $table ) && ltkf_db_column_exists( $table, 'status' );
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
+			$has = false;
+			return $has;
+		}
+		$has = ltkf_db_column_exists( $table, 'status' );
 		return $has;
 	}
 
@@ -291,24 +296,41 @@ class AdminPetLedger {
 		}
 
 		$table = ltkf_medical_records_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return array();
 		}
 
 		$limit = (int) apply_filters( 'ltkf_pet_ledger_medical_records_limit', 500 );
 		$limit = max( 1, min( 2000, $limit ) );
 
-		$cols = '`id`, `analyte_name`, `value_text`, `expiration_gmt`, `created_gmt`, `created_by`, `hl7_message_type`';
-		if ( ltkf_db_column_exists( $table, 'status' ) ) {
-			$cols .= ', `status`';
-		}
+		$has_status = ltkf_db_column_exists( $table, 'status' );
 
 		global $wpdb;
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Columns validated; table from helper.
-		$sql = "SELECT {$cols} FROM `{$table}` WHERE `pet_post_id` = %d ORDER BY `created_gmt` DESC LIMIT %d";
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Admin ledger; capped.
-		$rows = $wpdb->get_results( $wpdb->prepare( $sql, $pet_id, $limit ), ARRAY_A );
+		if ( $has_status ) {
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Admin ledger; `%i` validated.
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT `id`, `analyte_name`, `value_text`, `expiration_gmt`, `created_gmt`, `created_by`, `hl7_message_type`, `status` FROM %i WHERE `pet_post_id` = %d ORDER BY `created_gmt` DESC LIMIT %d',
+					$table,
+					$pet_id,
+					$limit
+				),
+				ARRAY_A
+			);
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
+		} else {
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT `id`, `analyte_name`, `value_text`, `expiration_gmt`, `created_gmt`, `created_by`, `hl7_message_type` FROM %i WHERE `pet_post_id` = %d ORDER BY `created_gmt` DESC LIMIT %d',
+					$table,
+					$pet_id,
+					$limit
+				),
+				ARRAY_A
+			);
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
+		}
 
 		return is_array( $rows ) ? $rows : array();
 	}

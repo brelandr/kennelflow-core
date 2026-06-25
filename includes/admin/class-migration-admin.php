@@ -116,7 +116,7 @@ class MigrationAdmin {
 			self::redirect_with_arg( 'ltkf_mig_err', 'no_file' );
 		}
 
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Validated via wp_check_filetype and move_uploaded_file.
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Validated via wp_check_filetype, is_uploaded_file(), and WP_Filesystem::move().
 		$file = $_FILES['ltkf_csv'];
 		if ( ! empty( $file['error'] ) ) {
 			self::redirect_with_arg( 'ltkf_mig_err', 'upload' );
@@ -140,11 +140,23 @@ class MigrationAdmin {
 		$job_id = wp_generate_password( 16, false, false );
 		$dest   = $dir . '/' . sanitize_file_name( $job_id ) . '.csv';
 
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_move_uploaded_file -- Validated CSV to uploads subtree.
-		if ( ! move_uploaded_file( $file['tmp_name'], $dest ) ) {
-			self::redirect_with_arg( 'ltkf_mig_err', 'move' );
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+
+		global $wp_filesystem;
+
+		// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Required pattern for WP_Filesystem().
+		if ( false === WP_Filesystem( false ) || ! $wp_filesystem instanceof \WP_Filesystem_Base ) {
+			self::redirect_with_arg( 'ltkf_mig_err', 'fs' );
 		}
 
+		$tmp_path = isset( $file['tmp_name'] ) ? (string) wp_unslash( $file['tmp_name'] ) : '';
+		if ( '' === $tmp_path || ! is_uploaded_file( $tmp_path ) ) {
+			self::redirect_with_arg( 'ltkf_mig_err', 'upload' );
+		}
+
+		if ( ! $wp_filesystem->move( $tmp_path, $dest, true ) ) {
+			self::redirect_with_arg( 'ltkf_mig_err', 'move' );
+		}
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Local validated CSV in uploads.
 		$fh = fopen( $dest, 'rb' );
 		if ( false === $fh ) {
@@ -198,7 +210,7 @@ class MigrationAdmin {
 				array(
 					'post_type' => ltkf_get_pet_post_type(),
 					'page'      => self::PAGE_SLUG,
-					'ltkf_job'    => $job_id,
+					'ltkf_job'  => $job_id,
 				),
 				admin_url( 'edit.php' )
 			)
@@ -212,7 +224,8 @@ class MigrationAdmin {
 	 * @return void
 	 */
 	public static function ajax_process_batch() {
-		if ( ! check_ajax_referer( self::AJAX_BATCH, 'nonce', false ) ) {
+		$nonce_value = isset( $_REQUEST['nonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['nonce'] ) ) : '';
+		if ( '' === $nonce_value || ! wp_verify_nonce( $nonce_value, self::AJAX_BATCH ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid security token.', 'kennelflow-core' ) ), 403 );
 		}
 
@@ -598,6 +611,7 @@ class MigrationAdmin {
 			'upload'  => __( 'Upload failed.', 'kennelflow-core' ),
 			'type'    => __( 'Only .csv files are allowed.', 'kennelflow-core' ),
 			'dir'     => __( 'Could not use uploads directory.', 'kennelflow-core' ),
+			'fs'      => __( 'Could not access the filesystem.', 'kennelflow-core' ),
 			'move'    => __( 'Could not store the uploaded file.', 'kennelflow-core' ),
 			'read'    => __( 'Could not read the file.', 'kennelflow-core' ),
 			'empty'   => __( 'The file is empty.', 'kennelflow-core' ),

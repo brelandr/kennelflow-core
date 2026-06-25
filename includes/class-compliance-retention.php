@@ -49,30 +49,55 @@ class ComplianceRetention {
 	 */
 	public static function maybe_upgrade_medical_records_schema() {
 		$table = ltkf_medical_records_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return;
 		}
 
 		global $wpdb;
 
 		if ( ! self::db_column_exists( $table, 'status' ) ) {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- DDL; table from helper.
-			$wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN `status` varchar(32) NOT NULL DEFAULT '" . esc_sql( self::RECORD_STATUS_ACTIVE ) . "' AFTER `meta_json`" );
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.PreparedSQL.NotPrepared -- DDL; `%i` table validated above.
+			$wpdb->query(
+				$wpdb->prepare(
+					'ALTER TABLE %i ADD COLUMN `status` varchar(32) NOT NULL DEFAULT %s AFTER `meta_json`',
+					$table,
+					self::RECORD_STATUS_ACTIVE
+				)
+			);
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.PreparedSQL.NotPrepared
 		}
 
 		if ( ! self::db_column_exists( $table, 'archived_gmt' ) ) {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN `archived_gmt` datetime NULL AFTER `status`" );
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.PreparedSQL.NotPrepared
+			$wpdb->query(
+				$wpdb->prepare(
+					'ALTER TABLE %i ADD COLUMN `archived_gmt` datetime NULL AFTER `status`',
+					$table
+				)
+			);
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.PreparedSQL.NotPrepared
 		}
 
 		if ( ! self::db_column_exists( $table, 'last_visit_date' ) ) {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN `last_visit_date` datetime NULL AFTER `reported_gmt`" );
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.PreparedSQL.NotPrepared
+			$wpdb->query(
+				$wpdb->prepare(
+					'ALTER TABLE %i ADD COLUMN `last_visit_date` datetime NULL AFTER `reported_gmt`',
+					$table
+				)
+			);
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.PreparedSQL.NotPrepared
 		}
 
 		if ( ! self::db_index_exists( $table, 'kf_mr_status' ) ) {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$wpdb->query( "ALTER TABLE `{$table}` ADD INDEX `kf_mr_status` (`status`)" );
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.PreparedSQL.NotPrepared
+			$wpdb->query(
+				$wpdb->prepare(
+					'ALTER TABLE %i ADD INDEX `kf_mr_status` (`status`)',
+					$table
+				)
+			);
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.PreparedSQL.NotPrepared
 		}
 	}
 
@@ -92,7 +117,7 @@ class ComplianceRetention {
 			return false;
 		}
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- INFORMATION_SCHEMA; identifiers validated.
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- INFORMATION_SCHEMA; identifiers regex-validated.
 		$n = (int) $wpdb->get_var(
 			$wpdb->prepare(
 				'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s',
@@ -101,6 +126,7 @@ class ComplianceRetention {
 				$column
 			)
 		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 		return $n > 0;
 	}
@@ -121,7 +147,7 @@ class ComplianceRetention {
 			return false;
 		}
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- INFORMATION_SCHEMA.STATISTICS; identifiers regex-validated.
 		$n = (int) $wpdb->get_var(
 			$wpdb->prepare(
 				'SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND INDEX_NAME = %s',
@@ -130,6 +156,7 @@ class ComplianceRetention {
 				$index
 			)
 		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 		return $n > 0;
 	}
@@ -182,7 +209,7 @@ class ComplianceRetention {
 		}
 
 		$table = ltkf_medical_records_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return 0;
 		}
 
@@ -198,45 +225,76 @@ class ComplianceRetention {
 
 		$has_last_visit = self::db_column_exists( $table, 'last_visit_date' );
 
-		if ( $has_last_visit ) {
-			$date_expr = 'COALESCE(`last_visit_date`, `collected_gmt`, `reported_gmt`, `created_gmt`)';
-		} else {
-			$date_expr = 'COALESCE(`collected_gmt`, `reported_gmt`, `created_gmt`)';
-		}
-
 		$archived_ts      = gmdate( 'Y-m-d H:i:s' );
 		$has_archived_gmt = self::db_column_exists( $table, 'archived_gmt' );
 
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Retention sweep; table from helper; date_expr is fixed COALESCE only.
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- `%i` table validated; each UPDATE uses a fully literal SQL template (no dynamic SQL fragments).
 		if ( $has_archived_gmt ) {
-			$sql = $wpdb->prepare(
-				"UPDATE `{$table}` SET `status` = %s, `archived_gmt` = %s
-				WHERE ( `status` IS NULL OR `status` <> %s )
-				AND {$date_expr} < %s
-				AND {$date_expr} IS NOT NULL
-				AND {$date_expr} != %s",
-				self::RECORD_STATUS_ARCHIVED,
-				$archived_ts,
-				self::RECORD_STATUS_ARCHIVED,
-				$cutoff,
-				'0000-00-00 00:00:00'
+			if ( $has_last_visit ) {
+				$wpdb->query(
+					$wpdb->prepare(
+						'UPDATE %i SET `status` = %s, `archived_gmt` = %s
+						WHERE ( `status` IS NULL OR `status` <> %s )
+						AND COALESCE(`last_visit_date`, `collected_gmt`, `reported_gmt`, `created_gmt`) < %s
+						AND COALESCE(`last_visit_date`, `collected_gmt`, `reported_gmt`, `created_gmt`) IS NOT NULL
+						AND COALESCE(`last_visit_date`, `collected_gmt`, `reported_gmt`, `created_gmt`) != %s',
+						$table,
+						self::RECORD_STATUS_ARCHIVED,
+						$archived_ts,
+						self::RECORD_STATUS_ARCHIVED,
+						$cutoff,
+						'0000-00-00 00:00:00'
+					)
+				);
+			} else {
+				$wpdb->query(
+					$wpdb->prepare(
+						'UPDATE %i SET `status` = %s, `archived_gmt` = %s
+						WHERE ( `status` IS NULL OR `status` <> %s )
+						AND COALESCE(`collected_gmt`, `reported_gmt`, `created_gmt`) < %s
+						AND COALESCE(`collected_gmt`, `reported_gmt`, `created_gmt`) IS NOT NULL
+						AND COALESCE(`collected_gmt`, `reported_gmt`, `created_gmt`) != %s',
+						$table,
+						self::RECORD_STATUS_ARCHIVED,
+						$archived_ts,
+						self::RECORD_STATUS_ARCHIVED,
+						$cutoff,
+						'0000-00-00 00:00:00'
+					)
+				);
+			}
+		} elseif ( $has_last_visit ) {
+			$wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET `status` = %s
+						WHERE ( `status` IS NULL OR `status` <> %s )
+						AND COALESCE(`last_visit_date`, `collected_gmt`, `reported_gmt`, `created_gmt`) < %s
+						AND COALESCE(`last_visit_date`, `collected_gmt`, `reported_gmt`, `created_gmt`) IS NOT NULL
+						AND COALESCE(`last_visit_date`, `collected_gmt`, `reported_gmt`, `created_gmt`) != %s',
+					$table,
+					self::RECORD_STATUS_ARCHIVED,
+					self::RECORD_STATUS_ARCHIVED,
+					$cutoff,
+					'0000-00-00 00:00:00'
+				)
 			);
 		} else {
-			$sql = $wpdb->prepare(
-				"UPDATE `{$table}` SET `status` = %s
-				WHERE ( `status` IS NULL OR `status` <> %s )
-				AND {$date_expr} < %s
-				AND {$date_expr} IS NOT NULL
-				AND {$date_expr} != %s",
-				self::RECORD_STATUS_ARCHIVED,
-				self::RECORD_STATUS_ARCHIVED,
-				$cutoff,
-				'0000-00-00 00:00:00'
+			$wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET `status` = %s
+						WHERE ( `status` IS NULL OR `status` <> %s )
+						AND COALESCE(`collected_gmt`, `reported_gmt`, `created_gmt`) < %s
+						AND COALESCE(`collected_gmt`, `reported_gmt`, `created_gmt`) IS NOT NULL
+						AND COALESCE(`collected_gmt`, `reported_gmt`, `created_gmt`) != %s',
+					$table,
+					self::RECORD_STATUS_ARCHIVED,
+					self::RECORD_STATUS_ARCHIVED,
+					$cutoff,
+					'0000-00-00 00:00:00'
+				)
 			);
 		}
-
-		$wpdb->query( $sql );
-		// phpcs:enable
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( ! empty( $wpdb->last_error ) ) {
 			return 0;
@@ -254,10 +312,10 @@ class ComplianceRetention {
 	protected static function retention_cutoff_mysql_gmt( $years ) {
 		$years = max( 1, absint( $years ) );
 		try {
-			$d = new DateTimeImmutable( 'now', new DateTimeZone( 'UTC' ) );
+			$d = new \DateTimeImmutable( 'now', new \DateTimeZone( 'UTC' ) );
 			$d = $d->modify( '-' . $years . ' years' );
 			return $d->format( 'Y-m-d H:i:s' );
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			unset( $e );
 			return gmdate( 'Y-m-d H:i:s', time() - ( $years * YEAR_IN_SECONDS ) );
 		}

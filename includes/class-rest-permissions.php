@@ -25,7 +25,7 @@ class RestPermissions {
 	 */
 	public static function get_managed_capability_definitions() {
 		$defs = array(
-			'kennelflow_vet_edit_emr'           => __( 'Edit Medical Records (EMR)', 'kennelflow-core' ),
+			'kennelflow_vet_edit_emr'     => __( 'Edit Medical Records (EMR)', 'kennelflow-core' ),
 			'kennelpress_override_roster' => __( 'Override Roster', 'kennelflow-core' ),
 			'groompress_view_commissions' => __( 'View Grooming Commissions', 'kennelflow-core' ),
 		);
@@ -87,7 +87,7 @@ class RestPermissions {
 			self::ROUTE,
 			array(
 				array(
-					'methods'             => WP_REST_Server::READABLE,
+					'methods'             => \WP_REST_Server::READABLE,
 					'callback'            => array( __CLASS__, 'get_permissions' ),
 					'permission_callback' => array( __CLASS__, 'permission_manage' ),
 				),

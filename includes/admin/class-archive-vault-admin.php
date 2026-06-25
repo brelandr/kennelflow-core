@@ -82,7 +82,7 @@ class ArchiveVaultAdmin {
 		);
 
 		$table = ltkf_medical_records_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			wp_safe_redirect( $redirect_error );
 			exit;
 		}
@@ -93,27 +93,36 @@ class ArchiveVaultAdmin {
 
 		$has_archived_gmt = self::db_column_exists( $table, 'archived_gmt' );
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Single-row restore.
-		$updated = $wpdb->update(
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Single-row restore; `%i` validated.
+		$prep = $wpdb->prepare(
+			'UPDATE %i SET `status` = %s WHERE `id` = %d AND `status` = %s',
 			$table,
-			array( 'status' => ComplianceRetention::RECORD_STATUS_ACTIVE ),
-			array(
-				'id'     => $record_id,
-				'status' => ComplianceRetention::RECORD_STATUS_ARCHIVED,
-			),
-			array( '%s' ),
-			array( '%d', '%s' )
+			ComplianceRetention::RECORD_STATUS_ACTIVE,
+			$record_id,
+			ComplianceRetention::RECORD_STATUS_ARCHIVED
 		);
+		if ( false === $prep ) {
+			wp_safe_redirect( $redirect_error );
+			exit;
+		}
+		$updated_result = $wpdb->query( $prep );
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
-		if ( false === $updated || (int) $wpdb->rows_affected < 1 ) {
+		if ( false === $updated_result || (int) $wpdb->rows_affected < 1 ) {
 			wp_safe_redirect( $redirect_error );
 			exit;
 		}
 
 		if ( $has_archived_gmt ) {
-			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Clear archive timestamp; wpdb->update does not set SQL NULL reliably here.
-			$wpdb->query( $wpdb->prepare( "UPDATE `{$table}` SET `archived_gmt` = NULL WHERE `id` = %d", $record_id ) );
-			// phpcs:enable
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- `%i` validated; nullable column.
+			$wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET `archived_gmt` = NULL WHERE `id` = %d',
+					$table,
+					$record_id
+				)
+			);
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 		}
 
 		self::maybe_log_kennelflow_vet_audit_restore( $record_id );

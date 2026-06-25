@@ -41,7 +41,7 @@ class OwnerPetsRestApi {
 			'/me/pets',
 			array(
 				array(
-					'methods'             => WP_REST_Server::CREATABLE,
+					'methods'             => \WP_REST_Server::CREATABLE,
 					'callback'            => array( __CLASS__, 'create_pet' ),
 					'permission_callback' => array( __CLASS__, 'permissions_logged_in' ),
 					'args'                => array(
@@ -60,7 +60,7 @@ class OwnerPetsRestApi {
 			'/me/pets/(?P<id>\d+)/compliance-vaccines',
 			array(
 				array(
-					'methods'             => WP_REST_Server::READABLE,
+					'methods'             => \WP_REST_Server::READABLE,
 					'callback'            => array( __CLASS__, 'get_compliance_vaccines' ),
 					'permission_callback' => array( __CLASS__, 'permissions_logged_in' ),
 					'args'                => array(

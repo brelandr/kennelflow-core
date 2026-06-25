@@ -148,6 +148,23 @@ class BookingComplianceGate {
 	}
 
 	/**
+	 * Hub `kf_bookings` table identifier when safe and present (for `$wpdb->prepare()` `%i`).
+	 *
+	 * @return string Empty when not usable.
+	 */
+	protected static function get_valid_bookings_index_table() {
+		$table = ltkf_bookings_table_name();
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) ) {
+			return '';
+		}
+		if ( ! function_exists( 'ltkf_table_exists' ) || ! ltkf_table_exists( $table ) ) {
+			return '';
+		}
+
+		return $table;
+	}
+
+	/**
 	 * Only boarding stays (not clinic or grooming) require vaccine compliance for payment.
 	 *
 	 * @param int $booking_post_id kf_bookings.post_id.
@@ -159,15 +176,22 @@ class BookingComplianceGate {
 			return false;
 		}
 
-		$table = ltkf_bookings_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		$table = self::get_valid_bookings_index_table();
+		if ( '' === $table ) {
 			return false;
 		}
 
 		global $wpdb;
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Hub ledger; single-row lookup.
-		$row = $wpdb->get_row( $wpdb->prepare( "SELECT booking_kind FROM `{$table}` WHERE post_id = %d LIMIT 1", $booking_post_id ) );
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Checkout gate; `%i` validated table name.
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				'SELECT booking_kind FROM %i WHERE post_id = %d LIMIT 1',
+				$table,
+				$booking_post_id
+			)
+		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		return ltkf_booking_row_is_boarding_stay_for_vaccine_compliance( $row );
 	}
@@ -184,15 +208,22 @@ class BookingComplianceGate {
 			return 0;
 		}
 
-		$table = ltkf_bookings_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		$table = self::get_valid_bookings_index_table();
+		if ( '' === $table ) {
 			return 0;
 		}
 
 		global $wpdb;
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Hub ledger.
-		$pet_id = $wpdb->get_var( $wpdb->prepare( "SELECT pet_id FROM `{$table}` WHERE post_id = %d LIMIT 1", $booking_post_id ) );
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
+		$pet_id = $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT pet_id FROM %i WHERE post_id = %d LIMIT 1',
+				$table,
+				$booking_post_id
+			)
+		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		return absint( $pet_id );
 	}

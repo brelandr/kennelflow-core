@@ -209,7 +209,8 @@ class AdminWebhooks {
 	 * @return void
 	 */
 	public static function ajax_test_webhook() {
-		if ( ! check_ajax_referer( self::NONCE_ACTION_TEST, 'nonce', false ) ) {
+		$nonce_value = isset( $_REQUEST['nonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['nonce'] ) ) : '';
+		if ( '' === $nonce_value || ! wp_verify_nonce( $nonce_value, self::NONCE_ACTION_TEST ) ) {
 			wp_send_json_error(
 				array( 'message' => __( 'Invalid security token.', 'kennelflow-core' ) ),
 				403
@@ -230,7 +231,7 @@ class AdminWebhooks {
 			);
 		}
 
-		$url = esc_url_raw( trim( (string) wp_unslash( $_POST['webhook_url'] ) ) );
+		$url = esc_url_raw( trim( sanitize_text_field( wp_unslash( $_POST['webhook_url'] ) ) ) );
 		if ( '' === $url || ! wp_http_validate_url( $url ) ) {
 			wp_send_json_error(
 				array( 'message' => __( 'Invalid or unreachable URL format.', 'kennelflow-core' ) ),
@@ -240,7 +241,7 @@ class AdminWebhooks {
 
 		$payload = array(
 			'event'    => 'ping',
-			'message'  => 'KennelFlow Webhook Test Successful',
+			'message'  => __( 'KennelFlow webhook test ping succeeded.', 'kennelflow-core' ),
 			'site_url' => home_url( '/' ),
 		);
 
@@ -252,7 +253,7 @@ class AdminWebhooks {
 			);
 		}
 
-		$response = wp_remote_post(
+		$response = wp_safe_remote_post(
 			$url,
 			array(
 				'timeout' => 15,

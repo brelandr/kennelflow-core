@@ -112,17 +112,20 @@ class DemoDataSeeder {
 		global $wpdb;
 
 		$com_table = $wpdb->prefix . 'ltkf_commissions';
-		if ( function_exists( 'ltkf_table_exists' ) && ltkf_table_exists( $com_table )
+		if ( is_string( $com_table )
+			&& preg_match( '/^[a-zA-Z0-9_]+$/', $com_table )
+			&& function_exists( 'ltkf_table_exists' ) && ltkf_table_exists( $com_table )
 			&& function_exists( 'ltkf_db_column_exists' ) && ltkf_db_column_exists( $com_table, 'meta_json' ) ) {
 			$like = '%' . $wpdb->esc_like( '_kf_is_demo_data' ) . '%';
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Demo nuke; prefix + literal table name; LIKE escaped.
-			$delc = $wpdb->query( $wpdb->prepare( "DELETE FROM `{$com_table}` WHERE meta_json LIKE %s", $like ) );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Demo nuke; `%i` commissions table validated above; LIKE escaped.
+			$delc = $wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE meta_json LIKE %s', $com_table, $like ) );
 			if ( is_numeric( $delc ) ) {
 				$counts['commissions'] = (int) $delc;
 			}
 		}
 
 		if ( post_type_exists( 'kennelpress_booking' ) ) {
+			// phpcs:disable WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Demo nuke runs on demand; collects demo-tagged bookings by meta (not storefront hot path).
 			$booking_ids = get_posts(
 				array(
 					'post_type'              => 'kennelpress_booking',
@@ -139,6 +142,7 @@ class DemoDataSeeder {
 					),
 				)
 			);
+			// phpcs:enable WordPress.DB.SlowDBQuery.slow_db_query_meta_query
 			foreach ( $booking_ids as $bid ) {
 				$bid = absint( $bid );
 				if ( $bid < 1 ) {
@@ -153,10 +157,12 @@ class DemoDataSeeder {
 
 		if ( function_exists( 'ltkf_medical_records_table_name' ) && function_exists( 'ltkf_table_exists' ) && function_exists( 'ltkf_db_column_exists' ) ) {
 			$table = ltkf_medical_records_table_name();
-			if ( ltkf_table_exists( $table ) && ltkf_db_column_exists( $table, 'meta_json' ) ) {
+			if ( is_string( $table ) && preg_match( '/^[a-zA-Z0-9_]+$/', $table )
+				&& ltkf_table_exists( $table )
+				&& ltkf_db_column_exists( $table, 'meta_json' ) ) {
 				$like = '%' . $wpdb->esc_like( '_kf_is_demo_data' ) . '%';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Demo nuke; table from helper; LIKE escaped.
-				$deleted_med = $wpdb->query( $wpdb->prepare( "DELETE FROM `{$table}` WHERE meta_json LIKE %s", $like ) );
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Demo nuke; `%i` medical index validated above; LIKE escaped.
+				$deleted_med = $wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE meta_json LIKE %s', $table, $like ) );
 				if ( is_numeric( $deleted_med ) ) {
 					$counts['medical'] = (int) $deleted_med;
 				}
@@ -165,6 +171,7 @@ class DemoDataSeeder {
 
 		$pet_type = function_exists( 'ltkf_get_pet_post_type' ) ? ltkf_get_pet_post_type() : '';
 		if ( '' !== $pet_type && post_type_exists( $pet_type ) ) {
+			// phpcs:disable WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Demo nuke; ID-only list of demo-tagged pets.
 			$pet_ids = get_posts(
 				array(
 					'post_type'              => $pet_type,
@@ -181,6 +188,7 @@ class DemoDataSeeder {
 					),
 				)
 			);
+			// phpcs:enable WordPress.DB.SlowDBQuery.slow_db_query_meta_query
 			foreach ( $pet_ids as $pid ) {
 				$pid = absint( $pid );
 				if ( $pid < 1 ) {
@@ -194,6 +202,7 @@ class DemoDataSeeder {
 		}
 
 		// Demo subscribers, veterinarians, groomers, and manager accounts (all tagged with META_DEMO).
+		// phpcs:disable WordPress.DB.SlowDBQuery.slow_db_query_meta_key,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Demo nuke; users filtered by `_kf_is_demo_data` only.
 		$user_ids = get_users(
 			array(
 				'fields'     => 'ID',
@@ -202,6 +211,7 @@ class DemoDataSeeder {
 				'number'     => 999999,
 			)
 		);
+		// phpcs:enable WordPress.DB.SlowDBQuery.slow_db_query_meta_key,WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 		foreach ( $user_ids as $uid ) {
 			$uid = absint( $uid );
 			if ( $uid < 2 ) {
@@ -594,10 +604,10 @@ class DemoDataSeeder {
 			return;
 		}
 
-		$utc = new DateTimeImmutable( 'now', new DateTimeZone( 'UTC' ) );
+		$utc = new \DateTimeImmutable( 'now', new \DateTimeZone( 'UTC' ) );
 		try {
 			$expiration_gmt = $utc->modify( '+' . wp_rand( 180, 730 ) . ' days' )->format( 'Y-m-d H:i:s' );
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			unset( $e );
 			return;
 		}
@@ -919,6 +929,7 @@ class DemoDataSeeder {
 			'groomers' => array(),
 		);
 
+		// phpcs:disable WordPress.DB.SlowDBQuery.slow_db_query_meta_key,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Demo generator; small bounded staff list by demo flag.
 		$users = get_users(
 			array(
 				'meta_key'     => self::META_DEMO,
@@ -928,6 +939,7 @@ class DemoDataSeeder {
 				'fields'       => 'all',
 			)
 		);
+		// phpcs:enable WordPress.DB.SlowDBQuery.slow_db_query_meta_key,WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 
 		if ( ! is_array( $users ) ) {
 			return $out;

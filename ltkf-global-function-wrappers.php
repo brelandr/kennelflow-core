@@ -157,6 +157,12 @@ if ( ! function_exists( 'ltkf_medical_records_table_name' ) ) {
 	}
 }
 
+if ( ! function_exists( 'ltkf_legacy_vet_medical_upload_subdir_hook' ) ) {
+	function ltkf_legacy_vet_medical_upload_subdir_hook() {
+		return \Landtech\KennelFlow\Core\ltkf_legacy_vet_medical_upload_subdir_hook();
+	}
+}
+
 if ( ! function_exists( 'ltkf_get_total_kennel_capacity' ) ) {
 	function ltkf_get_total_kennel_capacity() {
 		return \Landtech\KennelFlow\Core\ltkf_get_total_kennel_capacity();

@@ -77,12 +77,14 @@ class AdminDemoData {
 		$on_screen     = ( $expected_hook === $hook_suffix );
 		// When `kf_hub_menu_slug` points at a non-standard parent, `$hook_suffix` may differ from
 		// `{slug}_page_{page}`; still load assets when `?page=` requests this screen.
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Passive read-only screen resolution; AJAX mutation uses separate nonces below.
 		if ( ! $on_screen && isset( $_GET['page'] ) ) {
 			$page = sanitize_text_field( wp_unslash( (string) $_GET['page'] ) );
 			if ( self::PAGE_SLUG === $page ) {
 				$on_screen = true;
 			}
 		}
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 		if ( ! $on_screen ) {
 			return;
 		}
@@ -194,7 +196,8 @@ class AdminDemoData {
 	 * @return void
 	 */
 	public static function ajax_start_demo_generator() {
-		if ( ! check_ajax_referer( self::NONCE_ACTION, 'nonce', false ) ) {
+		$nonce_value = isset( $_REQUEST['nonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['nonce'] ) ) : '';
+		if ( '' === $nonce_value || ! wp_verify_nonce( $nonce_value, self::NONCE_ACTION ) ) {
 			wp_send_json_error(
 				array( 'message' => __( 'Invalid security token.', 'kennelflow-core' ) ),
 				403
@@ -259,7 +262,8 @@ class AdminDemoData {
 	 * @return void
 	 */
 	public static function ajax_nuke_demo_data() {
-		if ( ! check_ajax_referer( self::NONCE_ACTION, 'nonce', false ) ) {
+		$nonce_value = isset( $_REQUEST['nonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['nonce'] ) ) : '';
+		if ( '' === $nonce_value || ! wp_verify_nonce( $nonce_value, self::NONCE_ACTION ) ) {
 			wp_send_json_error(
 				array( 'message' => __( 'Invalid security token.', 'kennelflow-core' ) ),
 				403

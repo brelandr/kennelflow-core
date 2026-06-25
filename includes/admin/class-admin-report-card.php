@@ -114,7 +114,7 @@ class AdminReportCard {
 				'admin_notices',
 				static function () use ( $page_slug ) {
 					// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-					if ( ! isset( $_GET['page'] ) || $page_slug !== sanitize_key( wp_unslash( $_GET['page'] ) ) ) {
+					if ( ! isset( $_GET['page'] ) || sanitize_key( wp_unslash( $_GET['page'] ) ) !== $page_slug ) {
 						return;
 					}
 					if ( ! current_user_can( 'manage_options' ) ) {

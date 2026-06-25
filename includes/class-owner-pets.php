@@ -133,30 +133,35 @@ class OwnerPets {
 
 		$exclude_post_id = absint( $exclude_post_id );
 
-		$args = array(
-			'post_type'      => ltkf_get_pet_post_type(),
-			'post_status'    => 'any',
-			'posts_per_page' => -1,
-			'fields'         => 'ids',
-			'no_found_rows'  => true,
-			'meta_query'     => array(
-				array(
-					'key'   => ltkf_get_pet_owner_user_meta_key(),
-					'value' => $user_id,
-				),
-			),
-		);
+		global $wpdb;
 
-		if ( $exclude_post_id > 0 ) {
-			$args['post__not_in'] = array( $exclude_post_id );
+		$post_type = ltkf_get_pet_post_type();
+		$meta_key  = ltkf_get_pet_owner_user_meta_key();
+		if ( ! is_string( $post_type ) || ! preg_match( '/^[a-z0-9_\-]+$/', $post_type ) ) {
+			return;
+		}
+		if ( ! is_string( $meta_key ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $meta_key ) ) {
+			return;
 		}
 
-		// phpcs:disable WordPress.WP.PostsPerPage.posts_per_page_posts_per_page -- Sync index.
-		$q = new \WP_Query( $args );
-		// phpcs:enable WordPress.WP.PostsPerPage.posts_per_page_posts_per_page
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Hub owner sync; bounded JOIN on postmeta (replaces meta_query WP_Query).
+		$ids = $wpdb->get_col(
+			$wpdb->prepare(
+				'SELECT p.ID FROM %i AS p INNER JOIN %i AS pm ON pm.post_id = p.ID AND pm.meta_key = %s AND pm.meta_value = %s WHERE p.post_type = %s AND p.post_status NOT IN ( \'trash\', \'auto-draft\' )',
+				$wpdb->posts,
+				$wpdb->postmeta,
+				$meta_key,
+				(string) $user_id,
+				$post_type
+			)
+		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
-		$ids = array_map( 'absint', is_array( $q->posts ) ? $q->posts : array() );
+		$ids = array_map( 'absint', is_array( $ids ) ? $ids : array() );
 		$ids = array_values( array_filter( array_unique( $ids ) ) );
+		if ( $exclude_post_id > 0 ) {
+			$ids = array_values( array_diff( $ids, array( $exclude_post_id ) ) );
+		}
 
 		update_user_meta( $user_id, ltkf_get_owner_pet_ids_meta_key(), $ids );
 

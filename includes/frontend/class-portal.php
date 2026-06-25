@@ -48,9 +48,10 @@ class Portal {
 			array( 'kf-toast' ),
 			LTKF_CORE_VERSION
 		);
+		$sig_js = 'signature_pad.umd' . ( \defined( 'SCRIPT_DEBUG' ) && \SCRIPT_DEBUG ? '.js' : '.min.js' );
 		wp_register_script(
 			'signature-pad',
-			'https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js',
+			LTKF_PLUGIN_URL . 'assets/vendor/signature_pad/' . $sig_js,
 			array(),
 			'4.1.7',
 			true
@@ -212,7 +213,8 @@ class Portal {
 	 * @return void
 	 */
 	public static function ajax_pay_booking() {
-		if ( ! check_ajax_referer( 'ltkf_portal_pay', '_wpnonce', false ) ) {
+		$nonce_value = isset( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
+		if ( '' === $nonce_value || ! wp_verify_nonce( $nonce_value, 'ltkf_portal_pay' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid security token.', 'kennelflow-core' ) ), 403 );
 		}
 
@@ -276,7 +278,8 @@ class Portal {
 	 * @return void
 	 */
 	public static function ajax_pay_balance() {
-		if ( ! check_ajax_referer( 'ltkf_portal_pay_balance', '_wpnonce', false ) ) {
+		$nonce_value = isset( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
+		if ( '' === $nonce_value || ! wp_verify_nonce( $nonce_value, 'ltkf_portal_pay_balance' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid security token.', 'kennelflow-core' ) ), 403 );
 		}
 
@@ -345,7 +348,8 @@ class Portal {
 	 * @return void
 	 */
 	public static function ajax_waitlist_join() {
-		if ( ! check_ajax_referer( 'ltkf_waitlist_join', '_wpnonce', false ) ) {
+		$nonce_value = isset( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
+		if ( '' === $nonce_value || ! wp_verify_nonce( $nonce_value, 'ltkf_waitlist_join' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid security token.', 'kennelflow-core' ) ), 403 );
 		}
 
@@ -876,7 +880,7 @@ class Portal {
 
 			$cert_url = add_query_arg(
 				array(
-					'ltkf_cert'   => '1',
+					'ltkf_cert' => '1',
 					'record_id' => (int) $r->id,
 					'_wpnonce'  => wp_create_nonce( 'ltkf_cert_' . (int) $r->id ),
 				),

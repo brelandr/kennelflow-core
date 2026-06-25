@@ -291,7 +291,7 @@ class AdminPetMeta {
 	}
 
 	/**
-	 * Verify meta box nonce without using check_admin_referer().
+	 * Verify meta box nonce (save_post-safe: returns false when invalid; never wp_die() — avoids breaking autosave/REST saves).
 	 *
 	 * @param string $action Nonce action string.
 	 * @param string $field  $_POST key holding the nonce value.
@@ -306,6 +306,10 @@ class AdminPetMeta {
 		$nonce = sanitize_text_field( wp_unslash( $_POST[ $field ] ) );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		return (bool) wp_verify_nonce( $nonce, $action );
+		if ( ! wp_verify_nonce( $nonce, $action ) ) {
+			return false;
+		}
+
+		return true;
 	}
 }

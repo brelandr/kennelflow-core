@@ -1,11 +1,12 @@
 <?php
 /**
  * Plugin Name:       KennelFlow Core
- * Plugin URI:         https://github.com/landtechwebdesigns/kennelflow-core
+ * Plugin URI:         https://wordpress.org/plugins/kennelflow-core/
  * Description:        Hub foundation for KennelFlow: shared pets & locations, owner↔pet user mapping, and contracts for add-ons (KennelFlow Boarding, KennelFlow Vet, KennelFlow Groom, etc.).
- * Version:            0.2.0
- * Requires at least:  6.0
+ * Version:            0.2.2
+ * Requires at least:  6.2
  * Requires PHP:       7.4
+ * Tested up to:       7.0
  * Author:             LandTech Web Designs
  * License:            GPL-2.0-or-later
  * License URI:        https://www.gnu.org/licenses/gpl-2.0.html
@@ -16,21 +17,11 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'LTKF_CORE_VERSION', '0.2.0' );
+define( 'LTKF_CORE_VERSION', '0.2.2' );
 define( 'LTKF_PLUGIN_FILE', __FILE__ );
 define( 'LTKF_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LTKF_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'LTKF_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
-
-/**
- * Load translations at init priority 0 (WordPress 6.7+: avoid _load_textdomain_just_in_time before init).
- *
- * @return void
- */
-function ltkf_load_textdomain() {
-	load_plugin_textdomain( 'kennelflow-core', false, dirname( LTKF_PLUGIN_BASENAME ) . '/languages' );
-}
-add_action( 'init', 'ltkf_load_textdomain', 0 );
 
 require_once LTKF_PLUGIN_DIR . 'includes/functions-ltkf.php';
 require_once LTKF_PLUGIN_DIR . 'ltkf-global-function-wrappers.php';
@@ -39,7 +30,7 @@ require_once LTKF_PLUGIN_DIR . 'includes/class-autoloader.php';
 \Landtech\KennelFlow\Core\Autoloader::register();
 
 /**
- * Bootstrap KennelFlow Core (after textdomain is loaded).
+ * Bootstrap KennelFlow Core on init.
  *
  * @return void
  */

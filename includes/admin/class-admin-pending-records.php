@@ -126,7 +126,7 @@ class AdminPendingRecords {
 		}
 
 		$table = ltkf_medical_records_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			echo '<div class="wrap"><h1>' . esc_html__( 'Pending Records', 'kennelflow-core' ) . '</h1>';
 			echo '<p>' . esc_html__( 'The medical records table is not available.', 'kennelflow-core' ) . '</p></div>';
 			return;
@@ -145,16 +145,16 @@ class AdminPendingRecords {
 
 		global $wpdb;
 
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name from ltkf_medical_records_table_name(); placeholders used for values.
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Pending list; `%i` validated.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT * FROM `{$table}` WHERE `status` = %s ORDER BY `created_gmt` DESC",
+				'SELECT * FROM %i WHERE `status` = %s ORDER BY `created_gmt` DESC',
+				$table,
 				$pending
 			),
 			ARRAY_A
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( ! is_array( $rows ) ) {
 			$rows = array();
@@ -275,9 +275,9 @@ class AdminPendingRecords {
 		}
 		try {
 			$tz = wp_timezone();
-			$d  = new DateTimeImmutable( $date_ymd . ' 12:00:00', $tz );
-			return $d->setTimezone( new DateTimeZone( 'UTC' ) )->format( 'Y-m-d H:i:s' );
-		} catch ( Exception $e ) {
+			$d  = new \DateTimeImmutable( $date_ymd . ' 12:00:00', $tz );
+			return $d->setTimezone( new \DateTimeZone( 'UTC' ) )->format( 'Y-m-d H:i:s' );
+		} catch ( \Exception $e ) {
 			unset( $e );
 			return '';
 		}
@@ -289,12 +289,13 @@ class AdminPendingRecords {
 	 * @return void
 	 */
 	public static function ajax_download() {
-		$record_id = isset( $_GET['record_id'] ) ? absint( wp_unslash( $_GET['record_id'] ) ) : 0;
-		if ( $record_id < 1 ) {
+		if ( ! isset( $_GET['record_id'], $_GET['_wpnonce'] ) ) {
 			wp_die( esc_html__( 'Invalid request.', 'kennelflow-core' ), '', array( 'response' => 400 ) );
 		}
 
-		if ( ! check_ajax_referer( 'ltkf_pending_download_' . $record_id, '_wpnonce', false ) ) {
+		$record_id = absint( wp_unslash( $_GET['record_id'] ) );
+		$nonce_raw = sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) );
+		if ( $record_id < 1 || ! wp_verify_nonce( $nonce_raw, 'ltkf_pending_download_' . $record_id ) ) {
 			wp_die( esc_html__( 'Invalid security token.', 'kennelflow-core' ), '', array( 'response' => 403 ) );
 		}
 
@@ -303,24 +304,24 @@ class AdminPendingRecords {
 		}
 
 		$table = ltkf_medical_records_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			wp_die( esc_html__( 'Not found.', 'kennelflow-core' ), '', array( 'response' => 404 ) );
 		}
 
 		$pending = class_exists( 'ComplianceRetention' ) ? ComplianceRetention::RECORD_STATUS_PENDING_REVIEW : 'pending_review';
 
 		global $wpdb;
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name from ltkf_medical_records_table_name().
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 		$row = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT * FROM `{$table}` WHERE `id` = %d AND `status` = %s",
+				'SELECT * FROM %i WHERE `id` = %d AND `status` = %s',
+				$table,
 				$record_id,
 				$pending
 			),
 			ARRAY_A
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( ! is_array( $row ) || empty( $row['id'] ) ) {
 			wp_die( esc_html__( 'Not found.', 'kennelflow-core' ), '', array( 'response' => 404 ) );
@@ -359,11 +360,6 @@ class AdminPendingRecords {
 			if ( 0 === strpos( $resolved, $medical_base ) ) {
 				$ok_base = true;
 			}
-		} elseif ( class_exists( 'KennelFlow_Vet_Protected_Uploads' ) ) {
-			$medical_base = trailingslashit( wp_normalize_path( KennelFlow_Vet_Protected_Uploads::get_medical_dir() ) );
-			if ( 0 === strpos( $resolved, $medical_base ) ) {
-				$ok_base = true;
-			}
 		}
 		if ( ! $ok_base ) {
 			$upload = wp_upload_dir();
@@ -398,7 +394,8 @@ class AdminPendingRecords {
 	 * @return void
 	 */
 	public static function ajax_approve() {
-		if ( ! check_ajax_referer( self::NONCE_ACTION, '_wpnonce', false ) ) {
+		$nonce_value = isset( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
+		if ( '' === $nonce_value || ! wp_verify_nonce( $nonce_value, self::NONCE_ACTION ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid security token.', 'kennelflow-core' ) ), 403 );
 		}
 
@@ -418,7 +415,7 @@ class AdminPendingRecords {
 		}
 
 		$table = ltkf_medical_records_table_name();
-		if ( ! ltkf_table_exists( $table ) || ! ltkf_db_column_exists( $table, 'status' ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) || ! ltkf_db_column_exists( $table, 'status' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Database is not ready.', 'kennelflow-core' ) ), 503 );
 		}
 
@@ -426,17 +423,17 @@ class AdminPendingRecords {
 		$active  = class_exists( 'ComplianceRetention' ) ? ComplianceRetention::RECORD_STATUS_ACTIVE : 'active';
 
 		global $wpdb;
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name from ltkf_medical_records_table_name().
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 		$row = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT * FROM `{$table}` WHERE `id` = %d AND `status` = %s",
+				'SELECT * FROM %i WHERE `id` = %d AND `status` = %s',
+				$table,
 				$record_id,
 				$pending
 			),
 			ARRAY_A
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( ! is_array( $row ) || empty( $row['id'] ) ) {
 			wp_send_json_error( array( 'message' => __( 'Record not found or already processed.', 'kennelflow-core' ) ), 404 );
@@ -452,20 +449,20 @@ class AdminPendingRecords {
 			$meta_json = '{}';
 		}
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Single-row approval.
-		$updated = $wpdb->update(
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
+		$prep = $wpdb->prepare(
+			'UPDATE %i SET `status` = %s, `expiration_gmt` = %s, `meta_json` = %s WHERE `id` = %d',
 			$table,
-			array(
-				'status'         => $active,
-				'expiration_gmt' => $exp_gmt,
-				'meta_json'      => $meta_json,
-			),
-			array(
-				'id' => $record_id,
-			),
-			array( '%s', '%s', '%s' ),
-			array( '%d' )
+			$active,
+			$exp_gmt,
+			$meta_json,
+			$record_id
 		);
+		if ( false === $prep ) {
+			wp_send_json_error( array( 'message' => __( 'Could not update the record.', 'kennelflow-core' ) ), 500 );
+		}
+		$updated = $wpdb->query( $prep );
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( false === $updated ) {
 			wp_send_json_error( array( 'message' => __( 'Could not update the record.', 'kennelflow-core' ) ), 500 );
@@ -476,18 +473,6 @@ class AdminPendingRecords {
 
 		if ( $pet_id > 0 ) {
 			if ( class_exists( 'KennelFlow_Vet_EMR_Audit' ) ) {
-				KennelFlow_Vet_EMR_Audit::log(
-					'kf_pet',
-					$pet_id,
-					'compliance_pending_approved',
-					array( 'record_id' => $record_id ),
-					array(
-						'record_id'      => $record_id,
-						'expiration_gmt' => $exp_gmt,
-					),
-					get_current_user_id()
-				);
-			} elseif ( class_exists( 'KennelFlow_Vet_EMR_Audit' ) ) {
 				KennelFlow_Vet_EMR_Audit::log(
 					'kf_pet',
 					$pet_id,
@@ -526,7 +511,8 @@ class AdminPendingRecords {
 	 * @return void
 	 */
 	public static function ajax_reject() {
-		if ( ! check_ajax_referer( self::NONCE_ACTION, '_wpnonce', false ) ) {
+		$nonce_value = isset( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
+		if ( '' === $nonce_value || ! wp_verify_nonce( $nonce_value, self::NONCE_ACTION ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid security token.', 'kennelflow-core' ) ), 403 );
 		}
 
@@ -540,24 +526,24 @@ class AdminPendingRecords {
 		}
 
 		$table = ltkf_medical_records_table_name();
-		if ( ! ltkf_table_exists( $table ) || ! ltkf_db_column_exists( $table, 'status' ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) || ! ltkf_db_column_exists( $table, 'status' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Database is not ready.', 'kennelflow-core' ) ), 503 );
 		}
 
 		$pending = class_exists( 'ComplianceRetention' ) ? ComplianceRetention::RECORD_STATUS_PENDING_REVIEW : 'pending_review';
 
 		global $wpdb;
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name from ltkf_medical_records_table_name().
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 		$row = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT * FROM `{$table}` WHERE `id` = %d AND `status` = %s",
+				'SELECT * FROM %i WHERE `id` = %d AND `status` = %s',
+				$table,
 				$record_id,
 				$pending
 			),
 			ARRAY_A
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( ! is_array( $row ) || empty( $row['id'] ) ) {
 			wp_send_json_error( array( 'message' => __( 'Record not found or already processed.', 'kennelflow-core' ) ), 404 );
@@ -572,12 +558,17 @@ class AdminPendingRecords {
 			wp_delete_attachment( $attach, true );
 		}
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Reject deletes row.
-		$deleted = $wpdb->delete(
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
+		$prep = $wpdb->prepare(
+			'DELETE FROM %i WHERE `id` = %d',
 			$table,
-			array( 'id' => $record_id ),
-			array( '%d' )
+			$record_id
 		);
+		if ( false === $prep ) {
+			wp_send_json_error( array( 'message' => __( 'Could not delete the record.', 'kennelflow-core' ) ), 500 );
+		}
+		$deleted = $wpdb->query( $prep );
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( false === $deleted || $deleted < 1 ) {
 			wp_send_json_error( array( 'message' => __( 'Could not delete the record.', 'kennelflow-core' ) ), 500 );
@@ -585,20 +576,6 @@ class AdminPendingRecords {
 
 		if ( $pet_id > 0 ) {
 			if ( class_exists( 'KennelFlow_Vet_EMR_Audit' ) ) {
-				KennelFlow_Vet_EMR_Audit::log(
-					'kf_pet',
-					$pet_id,
-					'compliance_pending_rejected',
-					array(
-						'record_id'    => $record_id,
-						'analyte_name' => $doc_lab,
-					),
-					array(
-						'record_id' => $record_id,
-					),
-					get_current_user_id()
-				);
-			} elseif ( class_exists( 'KennelFlow_Vet_EMR_Audit' ) ) {
 				KennelFlow_Vet_EMR_Audit::log(
 					'kf_pet',
 					$pet_id,

@@ -337,22 +337,22 @@ class AdminClinicianProfiles {
 		update_user_meta( $user_id, self::META_PUBLIC_BIO, $bio );
 		update_user_meta( $user_id, self::META_SPECIALTIES, $spec );
 
-		$roster_out = self::parse_roster_from_post();
+		$roster_raw = array();
+		if ( isset( $_POST['kf_roster'] ) && is_array( $_POST['kf_roster'] ) ) {
+			$roster_raw = map_deep( wp_unslash( $_POST['kf_roster'] ), 'sanitize_text_field' );
+		}
+		$roster_out = self::parse_roster_from_post( $roster_raw );
 		update_user_meta( $user_id, self::META_LOCATION_ROSTER, $roster_out );
 	}
 
 	/**
-	 * Build roster array from POST (only checked days with valid start/end).
+	 * Build roster array from sanitized POST subtree (kf_roster) — checked days with valid start/end.
 	 *
+	 * @param array $roster_raw map_deep()-sanitized copy of POST `kf_roster`; must be populated only after nonce + capability checks in save_fields().
 	 * @return array<int|string, array<string, array{start: string, end: string}>>
 	 */
-	protected static function parse_roster_from_post() {
-		if ( ! isset( $_POST['ltkf_roster'] ) || ! is_array( $_POST['ltkf_roster'] ) ) {
-			return array();
-		}
-
-		$raw    = wp_unslash( $_POST['ltkf_roster'] );
-		$raw    = map_deep( $raw, 'sanitize_text_field' );
+	protected static function parse_roster_from_post( array $roster_raw ) {
+		$raw    = $roster_raw;
 		$valid  = self::get_roster_weekday_keys();
 		$validm = array_fill_keys( $valid, true );
 
@@ -364,7 +364,7 @@ class AdminClinicianProfiles {
 				continue;
 			}
 			$loc_pt = function_exists( 'ltkf_get_location_post_type' ) ? ltkf_get_location_post_type() : 'kf_location';
-			if ( $loc_pt !== get_post_type( $loc_id ) ) {
+			if ( get_post_type( $loc_id ) !== $loc_pt ) {
 				continue;
 			}
 
@@ -503,16 +503,16 @@ class AdminClinicianProfiles {
 			: ( wp_timezone_string() ? wp_timezone_string() : 'UTC' );
 
 		try {
-			$tz = new DateTimeZone( $tz_string );
-		} catch ( Exception $e ) {
+			$tz = new \DateTimeZone( $tz_string );
+		} catch ( \Exception $e ) {
 			unset( $e );
-			$tz = new DateTimeZone( 'UTC' );
+			$tz = new \DateTimeZone( 'UTC' );
 		}
 
 		try {
-			$start_utc = new DateTimeImmutable( $start_gmt, new DateTimeZone( 'UTC' ) );
-			$end_utc   = new DateTimeImmutable( $end_gmt, new DateTimeZone( 'UTC' ) );
-		} catch ( Exception $e ) {
+			$start_utc = new \DateTimeImmutable( $start_gmt, new \DateTimeZone( 'UTC' ) );
+			$end_utc   = new \DateTimeImmutable( $end_gmt, new \DateTimeZone( 'UTC' ) );
+		} catch ( \Exception $e ) {
 			unset( $e );
 			return false;
 		}
@@ -540,9 +540,9 @@ class AdminClinicianProfiles {
 		);
 
 		try {
-			$last_day = new DateTimeImmutable( $last_instant->format( 'Y-m-d' ), $tz );
-			$cursor   = new DateTimeImmutable( $start_local->format( 'Y-m-d' ), $tz );
-		} catch ( Exception $e ) {
+			$last_day = new \DateTimeImmutable( $last_instant->format( 'Y-m-d' ), $tz );
+			$cursor   = new \DateTimeImmutable( $start_local->format( 'Y-m-d' ), $tz );
+		} catch ( \Exception $e ) {
 			unset( $e );
 			return false;
 		}
@@ -573,9 +573,9 @@ class AdminClinicianProfiles {
 
 			$open_str  = $cursor->format( 'Y-m-d' ) . ' ' . $st;
 			$close_str = $cursor->format( 'Y-m-d' ) . ' ' . $en;
-			$open      = DateTimeImmutable::createFromFormat( 'Y-m-d H:i', $open_str, $tz );
-			$close     = DateTimeImmutable::createFromFormat( 'Y-m-d H:i', $close_str, $tz );
-			if ( ! $open instanceof DateTimeImmutable || ! $close instanceof DateTimeImmutable ) {
+			$open      = \DateTimeImmutable::createFromFormat( 'Y-m-d H:i', $open_str, $tz );
+			$close     = \DateTimeImmutable::createFromFormat( 'Y-m-d H:i', $close_str, $tz );
+			if ( ! $open instanceof \DateTimeImmutable || ! $close instanceof \DateTimeImmutable ) {
 				return false;
 			}
 			if ( $close <= $open ) {

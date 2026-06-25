@@ -84,23 +84,45 @@ class VipMemberships {
 			return '';
 		}
 
+		$cache_key   = 'booking_kind_' . $booking_post_id;
+		$cache_group = 'ltkf_vip_memberships';
+		$cached      = wp_cache_get( $cache_key, $cache_group );
+		if ( false !== $cached ) {
+			return is_string( $cached ) ? $cached : '';
+		}
+
 		$table = ltkf_bookings_table_name();
-		if ( function_exists( 'ltkf_table_exists' ) && ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) ) {
+			$table = '';
+		}
+		if ( '' !== $table && function_exists( 'ltkf_table_exists' ) && ltkf_table_exists( $table ) ) {
 			global $wpdb;
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Single-row lookup; table from helper.
-			$kind = $wpdb->get_var( $wpdb->prepare( "SELECT booking_kind FROM {$table} WHERE post_id = %d LIMIT 1", $booking_post_id ) );
-			if ( null !== $kind && '' !== (string) $kind ) {
-				return sanitize_key( (string) $kind );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.NotPrepared -- Single-row lookup; `%i`: bookings table name from helper; result cached below.
+			$db_kind = $wpdb->get_var(
+				$wpdb->prepare(
+					'SELECT booking_kind FROM %i WHERE post_id = %d LIMIT 1',
+					$table,
+					$booking_post_id
+				)
+			);
+			if ( null !== $db_kind && '' !== (string) $db_kind ) {
+				$kind = sanitize_key( (string) $db_kind );
+				wp_cache_set( $cache_key, $kind, $cache_group, 5 * MINUTE_IN_SECONDS );
+				return $kind;
 			}
 		}
 
 		if ( class_exists( 'KennelPress_Post_Meta' ) ) {
-			return KennelPress_Post_Meta::sanitize_booking_kind(
+			$resolved = KennelPress_Post_Meta::sanitize_booking_kind(
 				(string) get_post_meta( $booking_post_id, KennelPress_Post_Meta::BOOKING_KIND, true )
 			);
+		} else {
+			$resolved = sanitize_key( (string) get_post_meta( $booking_post_id, '_kennelpress_booking_kind', true ) );
 		}
 
-		return sanitize_key( (string) get_post_meta( $booking_post_id, '_kennelpress_booking_kind', true ) );
+		wp_cache_set( $cache_key, $resolved, $cache_group, 5 * MINUTE_IN_SECONDS );
+
+		return $resolved;
 	}
 
 	/**

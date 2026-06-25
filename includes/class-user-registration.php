@@ -111,6 +111,24 @@ class UserRegistration {
 	}
 
 	/**
+	 * Allow unauthenticated POST /register (spam/trap handled in {@see handle_register()}).
+	 *
+	 * @return bool
+	 */
+	public static function permission_public_registration() {
+		return true;
+	}
+
+	/**
+	 * Allow unauthenticated GET /verify-email (token proves possession).
+	 *
+	 * @return bool
+	 */
+	public static function permission_public_verify_email() {
+		return true;
+	}
+
+	/**
 	 * Register REST routes.
 	 *
 	 * @return void
@@ -120,29 +138,36 @@ class UserRegistration {
 			self::REST_NAMESPACE,
 			'/register',
 			array(
-				'methods'             => WP_REST_Server::CREATABLE,
+				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( __CLASS__, 'handle_register' ),
-				'permission_callback' => '__return_true',
+				'permission_callback' => array( __CLASS__, 'permission_public_registration' ),
 				'args'                => array(
 					'first_name' => array(
-						'type'     => 'string',
-						'required' => true,
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
 					),
 					'last_name'  => array(
-						'type'     => 'string',
-						'required' => true,
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
 					),
 					'email'      => array(
-						'type'     => 'string',
-						'required' => true,
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_email',
 					),
 					'password'   => array(
-						'type'     => 'string',
-						'required' => true,
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => static function ( $param ) {
+							return is_string( $param ) ? wp_unslash( $param ) : '';
+						},
 					),
-					'ltkf_trap'    => array(
-						'type'     => 'string',
-						'required' => false,
+					'ltkf_trap'  => array(
+						'type'              => 'string',
+						'required'          => false,
+						'sanitize_callback' => 'sanitize_text_field',
 					),
 				),
 			)
@@ -152,17 +177,19 @@ class UserRegistration {
 			self::REST_NAMESPACE,
 			'/verify-email',
 			array(
-				'methods'             => WP_REST_Server::READABLE,
+				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( __CLASS__, 'handle_verify_email' ),
-				'permission_callback' => '__return_true',
+				'permission_callback' => array( __CLASS__, 'permission_public_verify_email' ),
 				'args'                => array(
 					'user_id' => array(
-						'type'     => 'integer',
-						'required' => true,
+						'type'              => 'integer',
+						'required'          => true,
+						'sanitize_callback' => 'absint',
 					),
 					'token'   => array(
-						'type'     => 'string',
-						'required' => true,
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
 					),
 				),
 			)

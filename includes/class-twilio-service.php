@@ -21,11 +21,14 @@ class TwilioService {
 	const OPTION_FROM_NUMBER = 'ltkf_twilio_from_number';
 
 	/**
-	 * Send an SMS via Twilio REST API.
+	 * Send an SMS via Twilio REST API (WordPress HTTP API).
+	 *
+	 * Uses {@see wp_remote_post()} against the fixed Twilio HTTPS host (not user-supplied URL).
+	 * Checks {@see is_wp_error()} and requires HTTP 2xx before treating the send as successful.
 	 *
 	 * @param string $to_number Destination phone (normalized to E.164).
 	 * @param string $message   Message body (Twilio limits apply).
-	 * @return bool True when Twilio returns HTTP 2xx; false on missing config, bad number, or error.
+	 * @return bool True when Twilio returns HTTP 2xx; false on missing config, bad number, transport error, or non-2xx.
 	 */
 	public static function send_sms( $to_number, $message ) {
 		$sid   = get_option( self::OPTION_ACCOUNT_SID, '' );

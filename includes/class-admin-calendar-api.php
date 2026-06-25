@@ -49,7 +49,7 @@ class AdminCalendarApi {
 			self::REST_NAMESPACE,
 			self::ROUTE,
 			array(
-				'methods'             => WP_REST_Server::READABLE,
+				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( __CLASS__, 'get_calendar' ),
 				'permission_callback' => array( __CLASS__, 'permissions' ),
 				'args'                => array(
@@ -79,7 +79,7 @@ class AdminCalendarApi {
 			self::REST_NAMESPACE,
 			'/calendar/booking/(?P<id>\d+)',
 			array(
-				'methods'             => WP_REST_Server::EDITABLE,
+				'methods'             => \WP_REST_Server::EDITABLE,
 				'callback'            => array( __CLASS__, 'patch_booking' ),
 				'permission_callback' => array( __CLASS__, 'permissions' ),
 				'args'                => array(
@@ -97,7 +97,7 @@ class AdminCalendarApi {
 			'/bookings/(?P<id>\d+)',
 			array(
 				array(
-					'methods'             => WP_REST_Server::READABLE,
+					'methods'             => \WP_REST_Server::READABLE,
 					'callback'            => array( __CLASS__, 'proxy_get_booking' ),
 					'permission_callback' => array( __CLASS__, 'permissions' ),
 					'args'                => array(
@@ -131,7 +131,7 @@ class AdminCalendarApi {
 			'/bookings',
 			array(
 				array(
-					'methods'             => WP_REST_Server::CREATABLE,
+					'methods'             => \WP_REST_Server::CREATABLE,
 					'callback'            => array( __CLASS__, 'proxy_create_booking' ),
 					'permission_callback' => array( __CLASS__, 'permissions' ),
 					'args'                => self::get_hub_booking_context_meta_args(),
@@ -143,7 +143,7 @@ class AdminCalendarApi {
 			self::REST_NAMESPACE,
 			'/clinicians/(?P<id>\d+)/location-roster',
 			array(
-				'methods'             => WP_REST_Server::READABLE,
+				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( __CLASS__, 'get_clinician_location_roster' ),
 				'permission_callback' => array( __CLASS__, 'permissions' ),
 				'args'                => array(
@@ -398,7 +398,7 @@ class AdminCalendarApi {
 	 */
 	public static function get_calendar( $request ) {
 		$table = ltkf_bookings_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return new \WP_Error(
 				'ltkf_no_bookings_table',
 				__( 'Bookings table is not available.', 'kennelflow-core' ),
@@ -431,9 +431,9 @@ class AdminCalendarApi {
 		}
 
 		try {
-			$start_d = new DateTimeImmutable( $start_date . ' 00:00:00', new DateTimeZone( 'UTC' ) );
-			$end_d   = new DateTimeImmutable( $end_date . ' 00:00:00', new DateTimeZone( 'UTC' ) );
-		} catch ( Exception $e ) {
+			$start_d = new \DateTimeImmutable( $start_date . ' 00:00:00', new \DateTimeZone( 'UTC' ) );
+			$end_d   = new \DateTimeImmutable( $end_date . ' 00:00:00', new \DateTimeZone( 'UTC' ) );
+		} catch ( \Exception $e ) {
 			unset( $e );
 			return new \WP_Error(
 				'ltkf_invalid_dates',
@@ -528,7 +528,7 @@ class AdminCalendarApi {
 	 */
 	public static function patch_booking( $request ) {
 		$table = ltkf_bookings_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return new \WP_Error(
 				'ltkf_no_bookings_table',
 				__( 'Bookings table is not available.', 'kennelflow-core' ),
@@ -551,12 +551,10 @@ class AdminCalendarApi {
 		}
 
 		$data = array();
-		$fmt  = array();
 		$has  = false;
 
 		if ( array_key_exists( 'resource_id', $params ) ) {
 			$data['kennel_id'] = absint( $params['resource_id'] );
-			$fmt[]             = '%d';
 			$has               = true;
 		}
 
@@ -570,7 +568,6 @@ class AdminCalendarApi {
 				);
 			}
 			$data['start_gmt'] = $g;
-			$fmt[]             = '%s';
 			$has               = true;
 		}
 
@@ -584,7 +581,6 @@ class AdminCalendarApi {
 				);
 			}
 			$data['end_gmt'] = $g;
-			$fmt[]           = '%s';
 			$has             = true;
 		}
 
@@ -598,9 +594,15 @@ class AdminCalendarApi {
 
 		global $wpdb;
 
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- REST load row; table from helper.
-		$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM `{$table}` WHERE id = %d LIMIT 1", $id ) );
-		// phpcs:enable
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- REST load row; `%i` validated above.
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				'SELECT * FROM %i WHERE id = %d LIMIT 1',
+				$table,
+				$id
+			)
+		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( ! $row || ! isset( $row->id ) ) {
 			return new \WP_Error(
@@ -659,14 +661,83 @@ class AdminCalendarApi {
 			);
 		}
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- REST update; table from helper.
-		$updated = $wpdb->update(
-			$table,
-			$data,
-			array( 'id' => $id ),
-			$fmt,
-			array( '%d' )
-		);
+		$has_k = array_key_exists( 'kennel_id', $data );
+		$has_s = array_key_exists( 'start_gmt', $data );
+		$has_e = array_key_exists( 'end_gmt', $data );
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- REST PATCH; whitelisted columns; `%i` validated; static SET templates per branch.
+		if ( $has_k && $has_s && $has_e ) {
+			$updated = $wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET `kennel_id` = %d, `start_gmt` = %s, `end_gmt` = %s WHERE `id` = %d',
+					$table,
+					absint( $data['kennel_id'] ),
+					$data['start_gmt'],
+					$data['end_gmt'],
+					$id
+				)
+			);
+		} elseif ( $has_k && $has_s ) {
+			$updated = $wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET `kennel_id` = %d, `start_gmt` = %s WHERE `id` = %d',
+					$table,
+					absint( $data['kennel_id'] ),
+					$data['start_gmt'],
+					$id
+				)
+			);
+		} elseif ( $has_k && $has_e ) {
+			$updated = $wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET `kennel_id` = %d, `end_gmt` = %s WHERE `id` = %d',
+					$table,
+					absint( $data['kennel_id'] ),
+					$data['end_gmt'],
+					$id
+				)
+			);
+		} elseif ( $has_s && $has_e ) {
+			$updated = $wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET `start_gmt` = %s, `end_gmt` = %s WHERE `id` = %d',
+					$table,
+					$data['start_gmt'],
+					$data['end_gmt'],
+					$id
+				)
+			);
+		} elseif ( $has_k ) {
+			$updated = $wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET `kennel_id` = %d WHERE `id` = %d',
+					$table,
+					absint( $data['kennel_id'] ),
+					$id
+				)
+			);
+		} elseif ( $has_s ) {
+			$updated = $wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET `start_gmt` = %s WHERE `id` = %d',
+					$table,
+					$data['start_gmt'],
+					$id
+				)
+			);
+		} elseif ( $has_e ) {
+			$updated = $wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET `end_gmt` = %s WHERE `id` = %d',
+					$table,
+					$data['end_gmt'],
+					$id
+				)
+			);
+		} else {
+			$updated = false;
+		}
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( false === $updated ) {
 			return new \WP_Error(
@@ -718,6 +789,14 @@ class AdminCalendarApi {
 	protected static function has_confirmed_kennel_overlap( $table, $exclude_id, $kennel_id, $start_gmt, $end_gmt, $booking_kind = '' ) {
 		global $wpdb;
 
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
+			return new \WP_Error(
+				'ltkf_overlap_invalid_table',
+				__( 'Could not verify kennel availability.', 'kennelflow-core' ),
+				array( 'status' => 500 )
+			);
+		}
+
 		$status = apply_filters( 'ltkf_calendar_patch_conflict_status', 'confirmed' );
 		if ( ! is_string( $status ) || '' === $status ) {
 			$status = 'confirmed';
@@ -725,38 +804,30 @@ class AdminCalendarApi {
 
 		$kind = is_string( $booking_kind ) ? $booking_kind : '';
 
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- REST overlap check; table from helper.
-		$sql = $wpdb->prepare(
-			"
-			SELECT 1
-			FROM `{$table}`
-			WHERE id <> %d
-			AND kennel_id = %d
-			AND status = %s
-			AND booking_kind = %s
-			AND start_gmt < %s
-			AND end_gmt > %s
-			LIMIT 1
-			",
-			$exclude_id,
-			$kennel_id,
-			$status,
-			$kind,
-			$end_gmt,
-			$start_gmt
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- REST overlap; `%i` validated.
+		$hit = $wpdb->get_var(
+			$wpdb->prepare(
+				'
+				SELECT 1
+				FROM %i
+				WHERE id <> %d
+				AND kennel_id = %d
+				AND status = %s
+				AND booking_kind = %s
+				AND start_gmt < %s
+				AND end_gmt > %s
+				LIMIT 1
+				',
+				$table,
+				$exclude_id,
+				$kennel_id,
+				$status,
+				$kind,
+				$end_gmt,
+				$start_gmt
+			)
 		);
-		// phpcs:enable
-
-		if ( null === $sql ) {
-			return new \WP_Error(
-				'ltkf_overlap_prepare_failed',
-				__( 'Could not verify kennel availability.', 'kennelflow-core' ),
-				array( 'status' => 500 )
-			);
-		}
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Prepared above.
-		$hit = $wpdb->get_var( $sql );
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		return (bool) $hit;
 	}
@@ -771,48 +842,51 @@ class AdminCalendarApi {
 	protected static function get_booking_calendar_item( $table, $id ) {
 		global $wpdb;
 
-		$pet_type  = ltkf_get_pet_post_type();
-		$owner_key = ltkf_get_pet_owner_user_meta_key();
-
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Single booking for REST response; table from helper.
-		$prepared = $wpdb->prepare(
-			"
-			SELECT
-				b.id,
-				b.post_id,
-				b.pet_id,
-				b.start_gmt,
-				b.end_gmt,
-				b.status,
-				b.booking_kind,
-				b.kennel_id AS resource_id,
-				pet.post_title AS pet_name,
-				owner.display_name AS owner_name
-			FROM `{$table}` AS b
-			INNER JOIN {$wpdb->posts} AS pet
-				ON pet.ID = b.pet_id
-				AND pet.post_type = %s
-				AND pet.post_status NOT IN ( 'trash', 'auto-draft' )
-			LEFT JOIN {$wpdb->postmeta} AS pm_owner
-				ON pm_owner.post_id = pet.ID
-				AND pm_owner.meta_key = %s
-			LEFT JOIN {$wpdb->users} AS owner
-				ON owner.ID = CAST( NULLIF( pm_owner.meta_value, '' ) AS UNSIGNED )
-			WHERE b.id = %d
-			LIMIT 1
-			",
-			$pet_type,
-			$owner_key,
-			$id
-		);
-		// phpcs:enable
-
-		if ( null === $prepared ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return null;
 		}
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Prepared above.
-		$row = $wpdb->get_row( $prepared );
+		$pet_type  = ltkf_get_pet_post_type();
+		$owner_key = ltkf_get_pet_owner_user_meta_key();
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Single booking REST row; `%i` tables validated.
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				'
+				SELECT
+					b.id,
+					b.post_id,
+					b.pet_id,
+					b.start_gmt,
+					b.end_gmt,
+					b.status,
+					b.booking_kind,
+					b.kennel_id AS resource_id,
+					pet.post_title AS pet_name,
+					owner.display_name AS owner_name
+				FROM %i AS b
+				INNER JOIN %i AS pet
+					ON pet.ID = b.pet_id
+					AND pet.post_type = %s
+					AND pet.post_status NOT IN ( \'trash\', \'auto-draft\' )
+				LEFT JOIN %i AS pm_owner
+					ON pm_owner.post_id = pet.ID
+					AND pm_owner.meta_key = %s
+				LEFT JOIN %i AS owner
+					ON owner.ID = CAST( NULLIF( pm_owner.meta_value, \'\' ) AS UNSIGNED )
+				WHERE b.id = %d
+				LIMIT 1
+				',
+				$table,
+				$wpdb->posts,
+				$pet_type,
+				$wpdb->postmeta,
+				$owner_key,
+				$wpdb->users,
+				$id
+			)
+		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( ! $row ) {
 			return null;
@@ -847,10 +921,10 @@ class AdminCalendarApi {
 			return null;
 		}
 		try {
-			$d = new DateTimeImmutable( $s );
-			$d = $d->setTimezone( new DateTimeZone( 'UTC' ) );
+			$d = new \DateTimeImmutable( $s );
+			$d = $d->setTimezone( new \DateTimeZone( 'UTC' ) );
 			return $d->format( 'Y-m-d H:i:s' );
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			unset( $e );
 			return null;
 		}
@@ -882,6 +956,14 @@ class AdminCalendarApi {
 	protected static function query_bookings( $table, $window_start, $window_end, $booking_kind = '' ) {
 		global $wpdb;
 
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
+			return new \WP_Error(
+				'ltkf_calendar_prepare_failed',
+				__( 'Could not build calendar query.', 'kennelflow-core' ),
+				array( 'status' => 500 )
+			);
+		}
+
 		$pet_type  = ltkf_get_pet_post_type();
 		$owner_key = ltkf_get_pet_owner_user_meta_key();
 
@@ -896,97 +978,93 @@ class AdminCalendarApi {
 		$kind = is_string( $booking_kind ) ? sanitize_key( $booking_kind ) : '';
 		$kind = apply_filters( 'ltkf_rest_calendar_query_booking_kind', $kind, $table, $window_start, $window_end );
 
-		$kind_sql = '';
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- REST calendar; `%i` validated; bounded LIMIT.
 		if ( '' !== $kind ) {
-			$kind_sql = 'AND b.booking_kind = %s';
-		}
-
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- REST calendar; table name from helper; bounded LIMIT.
-		if ( '' !== $kind ) {
-			$prepared = $wpdb->prepare(
-				"
-				SELECT
-					b.id,
-					b.post_id,
-					b.pet_id,
-					b.start_gmt,
-					b.end_gmt,
-					b.status,
-					b.booking_kind,
-					b.kennel_id AS resource_id,
-					pet.post_title AS pet_name,
-					owner.display_name AS owner_name
-				FROM `{$table}` AS b
-				INNER JOIN {$wpdb->posts} AS pet
-					ON pet.ID = b.pet_id
-					AND pet.post_type = %s
-					AND pet.post_status NOT IN ( 'trash', 'auto-draft' )
-				LEFT JOIN {$wpdb->postmeta} AS pm_owner
-					ON pm_owner.post_id = pet.ID
-					AND pm_owner.meta_key = %s
-				LEFT JOIN {$wpdb->users} AS owner
-					ON owner.ID = CAST( NULLIF( pm_owner.meta_value, '' ) AS UNSIGNED )
-				WHERE b.start_gmt < %s
-				AND b.end_gmt > %s
-				{$kind_sql}
-				ORDER BY b.start_gmt ASC, b.id ASC
-				LIMIT %d
-				",
-				$pet_type,
-				$owner_key,
-				$window_end,
-				$window_start,
-				$kind,
-				$limit
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					'
+					SELECT
+						b.id,
+						b.post_id,
+						b.pet_id,
+						b.start_gmt,
+						b.end_gmt,
+						b.status,
+						b.booking_kind,
+						b.kennel_id AS resource_id,
+						pet.post_title AS pet_name,
+						owner.display_name AS owner_name
+					FROM %i AS b
+					INNER JOIN %i AS pet
+						ON pet.ID = b.pet_id
+						AND pet.post_type = %s
+						AND pet.post_status NOT IN ( \'trash\', \'auto-draft\' )
+					LEFT JOIN %i AS pm_owner
+						ON pm_owner.post_id = pet.ID
+						AND pm_owner.meta_key = %s
+					LEFT JOIN %i AS owner
+						ON owner.ID = CAST( NULLIF( pm_owner.meta_value, \'\' ) AS UNSIGNED )
+					WHERE b.start_gmt < %s
+					AND b.end_gmt > %s
+					AND b.booking_kind = %s
+					ORDER BY b.start_gmt ASC, b.id ASC
+					LIMIT %d
+					',
+					$table,
+					$wpdb->posts,
+					$pet_type,
+					$wpdb->postmeta,
+					$owner_key,
+					$wpdb->users,
+					$window_end,
+					$window_start,
+					$kind,
+					$limit
+				)
 			);
 		} else {
-			$prepared = $wpdb->prepare(
-				"
-				SELECT
-					b.id,
-					b.post_id,
-					b.pet_id,
-					b.start_gmt,
-					b.end_gmt,
-					b.status,
-					b.booking_kind,
-					b.kennel_id AS resource_id,
-					pet.post_title AS pet_name,
-					owner.display_name AS owner_name
-				FROM `{$table}` AS b
-				INNER JOIN {$wpdb->posts} AS pet
-					ON pet.ID = b.pet_id
-					AND pet.post_type = %s
-					AND pet.post_status NOT IN ( 'trash', 'auto-draft' )
-				LEFT JOIN {$wpdb->postmeta} AS pm_owner
-					ON pm_owner.post_id = pet.ID
-					AND pm_owner.meta_key = %s
-				LEFT JOIN {$wpdb->users} AS owner
-					ON owner.ID = CAST( NULLIF( pm_owner.meta_value, '' ) AS UNSIGNED )
-				WHERE b.start_gmt < %s
-				AND b.end_gmt > %s
-				ORDER BY b.start_gmt ASC, b.id ASC
-				LIMIT %d
-				",
-				$pet_type,
-				$owner_key,
-				$window_end,
-				$window_start,
-				$limit
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					'
+					SELECT
+						b.id,
+						b.post_id,
+						b.pet_id,
+						b.start_gmt,
+						b.end_gmt,
+						b.status,
+						b.booking_kind,
+						b.kennel_id AS resource_id,
+						pet.post_title AS pet_name,
+						owner.display_name AS owner_name
+					FROM %i AS b
+					INNER JOIN %i AS pet
+						ON pet.ID = b.pet_id
+						AND pet.post_type = %s
+						AND pet.post_status NOT IN ( \'trash\', \'auto-draft\' )
+					LEFT JOIN %i AS pm_owner
+						ON pm_owner.post_id = pet.ID
+						AND pm_owner.meta_key = %s
+					LEFT JOIN %i AS owner
+						ON owner.ID = CAST( NULLIF( pm_owner.meta_value, \'\' ) AS UNSIGNED )
+					WHERE b.start_gmt < %s
+					AND b.end_gmt > %s
+					ORDER BY b.start_gmt ASC, b.id ASC
+					LIMIT %d
+					',
+					$table,
+					$wpdb->posts,
+					$pet_type,
+					$wpdb->postmeta,
+					$owner_key,
+					$wpdb->users,
+					$window_end,
+					$window_start,
+					$limit
+				)
 			);
 		}
-		// phpcs:enable
-
-		if ( null === $prepared ) {
-			return new \WP_Error(
-				'ltkf_calendar_prepare_failed',
-				__( 'Could not build calendar query.', 'kennelflow-core' ),
-				array( 'status' => 500 )
-			);
-		}
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Prepared above.
-		$rows = $wpdb->get_results( $prepared );
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( ! is_array( $rows ) ) {
 			return new \WP_Error(

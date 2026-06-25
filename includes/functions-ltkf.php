@@ -81,6 +81,17 @@ function ltkf_get_pet_owner_user_meta_key() {
 }
 
 /**
+ * KennelFlow Vet documents this `apply_filters` / `add_filter` tag name for medical upload subdirectory;
+ * Core invokes it for interoperability (tag is not `ltkf_`-prefixed by historical API contract).
+ *
+ * @return string
+ */
+function ltkf_legacy_vet_medical_upload_subdir_hook() {
+	// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- KennelFlow Vet public filter tag; Core exposes via this prefixed accessor only.
+	return 'kennelflow_vet_medical_upload_subdir';
+}
+
+/**
  * Owner WordPress user ID for a pet (canonical Hub meta, with legacy KennelFlow Vet fallback).
  *
  * @param int $post_id Pet post ID.
@@ -259,20 +270,23 @@ function ltkf_table_exists( $table ) {
 	 * which fails when MySQL returns a different identifier case than sanitize_key().
 	 * INFORMATION_SCHEMA + LOWER() is reliable across lower_case_table_names settings.
 	 */
-	// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name validated via sanitize_key().
-	$n = $wpdb->get_var(
+	// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Schema probe; sanitized table name.
+	$n     = $wpdb->get_var(
 		$wpdb->prepare(
 			'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND LOWER(table_name) = LOWER(%s)',
 			$table
 		)
 	);
+	$found = null;
+	if ( null === $n || (int) $n < 1 ) {
+		$found = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table ) ) );
+	}
+	// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
 	if ( null !== $n && (int) $n > 0 ) {
 		return true;
 	}
 
-	// Fallback when information_schema is restricted or unavailable.
-	// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name validated; LIKE pattern is escaped.
-	$found = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table ) ) );
 	return null !== $found && '' !== $found && 0 === strcasecmp( (string) $found, $table );
 }
 
@@ -386,7 +400,7 @@ function ltkf_on_hub_location_post_change( $post_id, $post = null ) {
 		}
 	} else {
 		$pid = absint( $post_id );
-		if ( $pid < 1 || $pt !== get_post_type( $pid ) ) {
+		if ( $pid < 1 || get_post_type( $pid ) !== $pt ) {
 			return;
 		}
 	}
@@ -448,7 +462,7 @@ function ltkf_clinician_has_global_booking_overlap( $user_id, $start_gmt, $end_g
 	}
 
 	$table = ltkf_bookings_table_name();
-	if ( ! ltkf_table_exists( $table ) ) {
+	if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 		return false;
 	}
 
@@ -478,36 +492,35 @@ function ltkf_clinician_has_global_booking_overlap( $user_id, $start_gmt, $end_g
 
 	$status_placeholders = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
 
-	// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name validated; IN list from sanitized array.
 	if ( $exclude_post_id > 0 ) {
-		$prepare_args = array_merge(
-			array( $user_id, $exclude_post_id ),
+		$prepare_values = array_merge(
+			array( $table, $user_id, $exclude_post_id ),
 			$statuses,
 			array( $end_gmt, $start_gmt )
 		);
-		$sql          = $wpdb->prepare(
-			"SELECT 1 FROM `{$table}` WHERE kennel_id = %d AND post_id <> %d AND status IN ({$status_placeholders}) AND start_gmt < %s AND end_gmt > %s LIMIT 1",
-			...$prepare_args
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- `%i` bookings table validated; sanitised `%s` IN list matches `$statuses`.
+		$hit = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT 1 FROM %i WHERE kennel_id = %d AND post_id <> %d AND status IN ({$status_placeholders}) AND start_gmt < %s AND end_gmt > %s LIMIT 1",
+				...$prepare_values
+			)
 		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	} else {
-		$prepare_args = array_merge(
-			array( $user_id ),
+		$prepare_values = array_merge(
+			array( $table, $user_id ),
 			$statuses,
 			array( $end_gmt, $start_gmt )
 		);
-		$sql          = $wpdb->prepare(
-			"SELECT 1 FROM `{$table}` WHERE kennel_id = %d AND status IN ({$status_placeholders}) AND start_gmt < %s AND end_gmt > %s LIMIT 1",
-			...$prepare_args
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$hit = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT 1 FROM %i WHERE kennel_id = %d AND status IN ({$status_placeholders}) AND start_gmt < %s AND end_gmt > %s LIMIT 1",
+				...$prepare_values
+			)
 		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	}
-	// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-
-	if ( null === $sql ) {
-		return false;
-	}
-
-	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
-	$hit = $wpdb->get_var( $sql );
 
 	return (bool) $hit;
 }
@@ -562,7 +575,7 @@ function ltkf_get_total_kennel_capacity() {
  */
 function ltkf_get_current_occupancy_percentage() {
 	$table = ltkf_bookings_table_name();
-	if ( ! ltkf_table_exists( $table ) ) {
+	if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 		return 0.0;
 	}
 
@@ -582,8 +595,8 @@ function ltkf_get_current_occupancy_percentage() {
 
 	$window_start = gmdate( 'Y-m-d 00:00:00' );
 	try {
-		$start_d = new DateTimeImmutable( $window_start, new DateTimeZone( 'UTC' ) );
-	} catch ( Exception $e ) {
+		$start_d = new \DateTimeImmutable( $window_start, new \DateTimeZone( 'UTC' ) );
+	} catch ( \Exception $e ) {
 		unset( $e );
 		return 0.0;
 	}
@@ -603,28 +616,25 @@ function ltkf_get_current_occupancy_percentage() {
 
 	$placeholders = implode( ',', array_fill( 0, count( $kinds ), '%s' ) );
 
-	// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Occupancy snapshot; table from helper; IN list built from sanitized keys.
-	$sql = $wpdb->prepare(
-		"
-		SELECT COUNT(*) FROM `{$table}` AS b
-		WHERE b.status = %s
-		AND b.start_gmt < %s
-		AND b.end_gmt > %s
-		AND b.booking_kind IN ( {$placeholders} )
-		",
-		array_merge(
-			array( 'confirmed', $window_end, $window_start ),
-			$kinds
-		)
+	$prepare_values = array_merge(
+		array( $table, 'confirmed', $window_end, $window_start ),
+		$kinds
 	);
 
-	if ( null === $sql ) {
-		return 0.0;
-	}
-
-	// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Prepared above.
-	$count = (int) $wpdb->get_var( $sql );
-	// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- `%i` validated; booking_kind IN list matches `$kinds`.
+	$count = (int) $wpdb->get_var(
+		$wpdb->prepare(
+			'
+			SELECT COUNT(*) FROM %i AS b
+			WHERE b.status = %s
+			AND b.start_gmt < %s
+			AND b.end_gmt > %s
+			AND b.booking_kind IN ( ' . $placeholders . ' )
+			',
+			...$prepare_values
+		)
+	);
+	// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 	if ( $count < 0 ) {
 		$count = 0;
@@ -728,7 +738,7 @@ function ltkf_db_column_exists( $table, $column ) {
 		return false;
 	}
 
-	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- INFORMATION_SCHEMA; identifiers validated.
+	// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- INFORMATION_SCHEMA; identifiers regex-validated.
 	$n = (int) $wpdb->get_var(
 		$wpdb->prepare(
 			'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s',
@@ -737,6 +747,7 @@ function ltkf_db_column_exists( $table, $column ) {
 			$column
 		)
 	);
+	// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 	return $n > 0;
 }
@@ -877,7 +888,10 @@ function ltkf_get_pet_compliance_status( $pet_id ) {
 function ltkf_get_pet_pending_compliance_vaccine_norms( $pet_id ) {
 	$pet_id = absint( $pet_id );
 	$table  = ltkf_medical_records_table_name();
-	if ( $pet_id < 1 || ! ltkf_table_exists( $table ) || ! class_exists( 'ComplianceRulesEngine' ) ) {
+	if ( $pet_id < 1
+		|| ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table )
+		|| ! ltkf_table_exists( $table )
+		|| ! class_exists( 'ComplianceRulesEngine' ) ) {
 		return array();
 	}
 
@@ -891,24 +905,28 @@ function ltkf_get_pet_pending_compliance_vaccine_norms( $pet_id ) {
 			$pending = ComplianceRetention::RECORD_STATUS_PENDING_REVIEW;
 		}
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Hub table; identifiers validated.
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- kf_medical_records pending rows; `%i` table.
 		$rows = $wpdb->get_col(
 			$wpdb->prepare(
-				"SELECT `analyte_name` FROM `{$table}` WHERE `pet_post_id` = %d AND `status` = %s",
+				'SELECT analyte_name FROM %i WHERE pet_post_id = %d AND status = %s',
+				$table,
 				$pet_id,
 				$pending
 			)
 		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 	} else {
 		$like = '%owner_compliance_upload%';
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Hub table; LIKE fixed pattern.
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- kf_medical_records legacy meta_json scan; `%i` table.
 		$rows = $wpdb->get_col(
 			$wpdb->prepare(
-				"SELECT `analyte_name` FROM `{$table}` WHERE `pet_post_id` = %d AND `meta_json` LIKE %s",
+				'SELECT analyte_name FROM %i WHERE pet_post_id = %d AND meta_json LIKE %s',
+				$table,
 				$pet_id,
 				$like
 			)
 		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 	}
 
 	if ( ! is_array( $rows ) ) {

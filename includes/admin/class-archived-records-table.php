@@ -63,7 +63,7 @@ class ArchivedRecordsTable extends \WP_List_Table {
 		$this->_column_headers = array( $this->get_columns(), array(), array() );
 
 		$table = ltkf_medical_records_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			$this->items = array();
 			$this->set_pagination_args(
 				array(
@@ -81,23 +81,25 @@ class ArchivedRecordsTable extends \WP_List_Table {
 		$paged    = max( 1, (int) $this->get_pagenum() );
 		$offset   = ( $paged - 1 ) * $per_page;
 
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Admin vault; table name from helper.
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Admin vault; `%i` validated.
 		$total = (int) $wpdb->get_var(
 			$wpdb->prepare(
-				"SELECT COUNT(*) FROM `{$table}` WHERE `status` = %s",
+				'SELECT COUNT(*) FROM %i WHERE `status` = %s',
+				$table,
 				ComplianceRetention::RECORD_STATUS_ARCHIVED
 			)
 		);
 
-		$sql = $wpdb->prepare(
-			"SELECT * FROM `{$table}` WHERE `status` = %s ORDER BY COALESCE(`archived_gmt`, `created_gmt`) DESC, `id` DESC LIMIT %d OFFSET %d",
-			ComplianceRetention::RECORD_STATUS_ARCHIVED,
-			$per_page,
-			$offset
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT * FROM %i WHERE `status` = %s ORDER BY COALESCE(`archived_gmt`, `created_gmt`) DESC, `id` DESC LIMIT %d OFFSET %d',
+				$table,
+				ComplianceRetention::RECORD_STATUS_ARCHIVED,
+				$per_page,
+				$offset
+			)
 		);
-
-		$rows = $wpdb->get_results( $sql );
-		// phpcs:enable
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		$this->items = is_array( $rows ) ? $rows : array();
 
@@ -257,8 +259,8 @@ class ArchivedRecordsTable extends \WP_List_Table {
 	 */
 	protected static function format_datetime_site( $mysql_gmt ) {
 		try {
-			$d = new DateTimeImmutable( $mysql_gmt, new DateTimeZone( 'UTC' ) );
-		} catch ( Exception $e ) {
+			$d = new \DateTimeImmutable( $mysql_gmt, new \DateTimeZone( 'UTC' ) );
+		} catch ( \Exception $e ) {
 			unset( $e );
 			return $mysql_gmt;
 		}

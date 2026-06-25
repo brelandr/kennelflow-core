@@ -263,9 +263,12 @@ class WebhookEngine {
 	}
 
 	/**
-	 * Perform wp_remote_post.
+	 * POST JSON to a subscriber URL via the WordPress HTTP API.
 	 *
-	 * @param array<string, string> $args url, event, body.
+	 * Uses {@see wp_safe_remote_post()} because the destination is user-configured (SSRF mitigation).
+	 * Validates HTTP result: discards transport errors and non-2xx responses (see `ltkf_webhook_delivery_failed`).
+	 *
+	 * @param array<string, string> $args Associative args: `url` (HTTPS), `event` (slug), `body` (JSON string).
 	 * @return void
 	 */
 	protected static function deliver_http( $args ) {
@@ -280,7 +283,7 @@ class WebhookEngine {
 			return;
 		}
 
-		$response = wp_remote_post(
+		$response = wp_safe_remote_post(
 			$url,
 			array(
 				'timeout'  => 15,
@@ -371,14 +374,24 @@ class WebhookEngine {
 		}
 
 		$table = ltkf_bookings_table_name();
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) ) {
+			return null;
+		}
 		if ( ! ltkf_table_exists( $table ) ) {
 			return null;
 		}
 
 		global $wpdb;
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Single-row lookup for webhook payload.
-		$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM `{$table}` WHERE post_id = %d LIMIT 1", $post_id ) );
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Webhook helper; `%i` table identifier validated above.
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				'SELECT * FROM %i WHERE post_id = %d LIMIT 1',
+				$table,
+				$post_id
+			)
+		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		return is_object( $row ) ? $row : null;
 	}

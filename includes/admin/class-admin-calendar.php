@@ -115,7 +115,7 @@ class AdminCalendar {
 					'admin_notices',
 					static function () use ( $page_slug ) {
 						// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-						if ( ! isset( $_GET['page'] ) || $page_slug !== sanitize_key( wp_unslash( $_GET['page'] ) ) ) {
+						if ( ! isset( $_GET['page'] ) || sanitize_key( wp_unslash( $_GET['page'] ) ) !== $page_slug ) {
 							return;
 						}
 						if ( ! current_user_can( 'manage_options' ) ) {
@@ -175,7 +175,7 @@ class AdminCalendar {
 	 * @return array{0:string,1:string} start_date, end_date
 	 */
 	protected static function current_week_range_utc() {
-		$utc = new DateTimeImmutable( 'now', new DateTimeZone( 'UTC' ) );
+		$utc = new \DateTimeImmutable( 'now', new \DateTimeZone( 'UTC' ) );
 
 		$day_of_week = (int) $utc->format( 'N' );
 		$week_start  = $utc->modify( '-' . ( $day_of_week - 1 ) . ' days' )->setTime( 0, 0, 0 );

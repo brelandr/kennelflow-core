@@ -29,11 +29,13 @@ class WaitlistFront {
 	 * @return void
 	 */
 	public static function maybe_redirect_offer_to_checkout() {
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Emailed GET links use opaque `ltkf_waitlist_offer` validated against DB (not admin forms).
 		if ( ! isset( $_GET['ltkf_waitlist_offer'] ) ) {
 			return;
 		}
 
 		$token = isset( $_GET['ltkf_waitlist_offer'] ) ? sanitize_text_field( wp_unslash( $_GET['ltkf_waitlist_offer'] ) ) : '';
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 		if ( '' === $token ) {
 			return;
 		}

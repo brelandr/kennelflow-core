@@ -43,7 +43,9 @@ class WaiverStorage {
 			return '';
 		}
 
+		// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- KennelFlow Vet legacy documented tag (`ltkf_legacy_vet_medical_upload_subdir_hook()`).
 		$subdir = apply_filters( 'ltkf_medical_upload_subdir', apply_filters( 'kennelflow_vet_medical_upload_subdir', 'kennelflow-vet-medical' ) );
+		// phpcs:enable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 		$subdir = trim( str_replace( array( '..', '\\' ), '', (string) $subdir ), '/' );
 		if ( '' === $subdir ) {
 			$subdir = 'kennelflow-vet-medical';

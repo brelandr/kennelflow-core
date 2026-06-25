@@ -69,7 +69,7 @@ class ComplianceRulesEngine {
 		}
 
 		$table = ltkf_medical_records_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			foreach ( $required as $label ) {
 				$vaccines[ $label ] = array(
 					'status'         => 'Missing',
@@ -87,18 +87,33 @@ class ComplianceRulesEngine {
 		global $wpdb;
 
 		$exclude = ltkf_medical_records_where_not_archived_for_prepare();
-		$sql     = "SELECT `id`, `analyte_name`, `expiration_gmt`, `created_gmt` FROM `{$table}` WHERE `pet_post_id` = %d";
-		$sql    .= $exclude['sql'];
-		$sql    .= ' ORDER BY `created_gmt` DESC';
 
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Hub medical rows; `%i` table; static templates (matches `ltkf_medical_records_where_not_archived_for_prepare()` fragment).
 		if ( '' !== $exclude['sql'] ) {
-			$prep_args = array_merge( array( $sql, $pet_id ), (array) $exclude['value'] );
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Hub medical table; per request; fragment from ltkf_medical_records_where_not_archived_for_prepare().
-			$rows = $wpdb->get_results( call_user_func_array( array( $wpdb, 'prepare' ), $prep_args ), ARRAY_A );
+			$ex_vals = (array) $exclude['value'];
+			$xa      = isset( $ex_vals[0] ) ? (string) $ex_vals[0] : '';
+			$xb      = isset( $ex_vals[1] ) ? (string) $ex_vals[1] : '';
+			$rows    = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT `id`, `analyte_name`, `expiration_gmt`, `created_gmt` FROM %i WHERE `pet_post_id` = %d AND ( `status` IS NULL OR ( `status` <> %s AND `status` <> %s ) ) ORDER BY `created_gmt` DESC',
+					$table,
+					$pet_id,
+					$xa,
+					$xb
+				),
+				ARRAY_A
+			);
 		} else {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Hub medical table; status column may be absent.
-			$rows = $wpdb->get_results( $wpdb->prepare( $sql, $pet_id ), ARRAY_A );
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT `id`, `analyte_name`, `expiration_gmt`, `created_gmt` FROM %i WHERE `pet_post_id` = %d ORDER BY `created_gmt` DESC',
+					$table,
+					$pet_id
+				),
+				ARRAY_A
+			);
 		}
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( ! is_array( $rows ) ) {
 			$rows = array();

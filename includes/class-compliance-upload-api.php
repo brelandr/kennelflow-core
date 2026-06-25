@@ -54,7 +54,7 @@ class ComplianceUploadApi {
 			self::REST_NAMESPACE,
 			self::ROUTE,
 			array(
-				'methods'             => WP_REST_Server::CREATABLE,
+				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( __CLASS__, 'upload' ),
 				'permission_callback' => array( __CLASS__, 'permissions_logged_in' ),
 				'args'                => array(
@@ -187,6 +187,7 @@ class ComplianceUploadApi {
 		}
 
 		if ( class_exists( 'KennelFlow_Vet_Protected_Uploads' ) ) {
+			// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- KennelFlow Vet legacy documented tag (`ltkf_legacy_vet_medical_upload_subdir_hook()`).
 			add_filter( 'kennelflow_vet_medical_upload_subdir', array( __CLASS__, 'filter_compliance_upload_subdir' ), 20 );
 			add_filter( 'kennelflow_vet_handle_upload_medical_mimes', array( __CLASS__, 'filter_compliance_upload_mimes' ), 20, 3 );
 
@@ -194,6 +195,7 @@ class ComplianceUploadApi {
 
 			remove_filter( 'kennelflow_vet_handle_upload_medical_mimes', array( __CLASS__, 'filter_compliance_upload_mimes' ), 20 );
 			remove_filter( 'kennelflow_vet_medical_upload_subdir', array( __CLASS__, 'filter_compliance_upload_subdir' ), 20 );
+			// phpcs:enable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 		} else {
 			$result = self::handle_upload_core_fallback( $file, $pet_id );
 		}
@@ -450,7 +452,9 @@ class ComplianceUploadApi {
 			return $dirs;
 		}
 
+		// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- KennelFlow Vet legacy documented tag.
 		$subdir = apply_filters( 'ltkf_medical_upload_subdir', apply_filters( 'kennelflow_vet_medical_upload_subdir', self::PROTECTED_SUBDIR ) );
+		// phpcs:enable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 		$subdir = trim( str_replace( array( '..', '\\' ), '', (string) $subdir ), '/' );
 		if ( '' === $subdir ) {
 			$subdir = self::PROTECTED_SUBDIR;

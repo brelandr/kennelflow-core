@@ -42,7 +42,7 @@ class ReportCardApi {
 			self::REST_NAMESPACE,
 			self::ROUTE_BASE . '/boarded-pets',
 			array(
-				'methods'             => WP_REST_Server::READABLE,
+				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( __CLASS__, 'get_boarded_pets' ),
 				'permission_callback' => array( __CLASS__, 'permissions' ),
 			)
@@ -52,7 +52,7 @@ class ReportCardApi {
 			self::REST_NAMESPACE,
 			self::ROUTE_BASE,
 			array(
-				'methods'             => WP_REST_Server::CREATABLE,
+				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( __CLASS__, 'send_report_card' ),
 				'permission_callback' => array( __CLASS__, 'permissions' ),
 				'args'                => array(
@@ -102,7 +102,7 @@ class ReportCardApi {
 		unset( $request );
 
 		$table = ltkf_bookings_table_name();
-		if ( ! ltkf_table_exists( $table ) ) {
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return new \WP_Error(
 				'ltkf_no_bookings_table',
 				__( 'Bookings table is not available.', 'kennelflow-core' ),
@@ -121,27 +121,45 @@ class ReportCardApi {
 		$exclude_statuses = array_map( 'sanitize_key', (array) $exclude_statuses );
 		$exclude_statuses = array_values( array_filter( array_unique( $exclude_statuses ) ) );
 
-		$sql = "
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- `%i`; KennelFlow ledger; optional NOT IN from sanitized statuses.
+		if ( empty( $exclude_statuses ) ) {
+			$pet_ids = $wpdb->get_col(
+				$wpdb->prepare(
+					'
 			SELECT DISTINCT b.pet_id
-			FROM {$table} AS b
+			FROM %i AS b
 			WHERE b.start_gmt <= %s
 			AND b.end_gmt >= %s
 			AND b.pet_id > 0
-			AND ( b.booking_kind IS NULL OR b.booking_kind = '' OR b.booking_kind <> %s )
-		";
-
-		$args = array( $now_gmt, $now_gmt, 'clinic' );
-
-		if ( ! empty( $exclude_statuses ) ) {
-			$placeholders = implode( ',', array_fill( 0, count( $exclude_statuses ), '%s' ) );
-			$sql          = $sql . " AND b.status NOT IN ( {$placeholders} ) ";
-			$args         = array_merge( $args, $exclude_statuses );
+			AND ( b.booking_kind IS NULL OR b.booking_kind = \'\' OR b.booking_kind <> %s )
+			ORDER BY b.pet_id ASC',
+					$table,
+					$now_gmt,
+					$now_gmt,
+					'clinic'
+				)
+			);
+		} else {
+			$st_ph   = implode( ',', array_fill( 0, count( $exclude_statuses ), '%s' ) );
+			$pet_ids = $wpdb->get_col(
+				$wpdb->prepare(
+					'
+			SELECT DISTINCT b.pet_id
+			FROM %i AS b
+			WHERE b.start_gmt <= %s
+			AND b.end_gmt >= %s
+			AND b.pet_id > 0
+			AND ( b.booking_kind IS NULL OR b.booking_kind = \'\' OR b.booking_kind <> %s )
+			AND b.status NOT IN ( ' . $st_ph . ' )
+			ORDER BY b.pet_id ASC',
+					...array_merge(
+						array( $table, $now_gmt, $now_gmt, 'clinic' ),
+						$exclude_statuses
+					)
+				)
+			);
 		}
-
-		$sql .= ' ORDER BY b.pet_id ASC';
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- KennelFlow ledger; dynamic NOT IN.
-		$pet_ids = $wpdb->get_col( $wpdb->prepare( $sql, $args ) );
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 		$pet_ids = array_values( array_filter( array_map( 'absint', is_array( $pet_ids ) ? $pet_ids : array() ) ) );
 
@@ -332,7 +350,7 @@ class ReportCardApi {
 	protected static function pet_is_currently_boarded( $pet_id ) {
 		$pet_id = absint( $pet_id );
 		$table  = ltkf_bookings_table_name();
-		if ( ! ltkf_table_exists( $table ) || $pet_id < 1 ) {
+		if ( $pet_id < 1 || ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return false;
 		}
 
@@ -347,23 +365,42 @@ class ReportCardApi {
 		$exclude_statuses = array_map( 'sanitize_key', (array) $exclude_statuses );
 		$exclude_statuses = array_values( array_filter( array_unique( $exclude_statuses ) ) );
 
-		$sql  = "
-			SELECT COUNT(*) FROM {$table} AS b
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- `%i`; KennelFlow ledger.
+		if ( empty( $exclude_statuses ) ) {
+			$count = (int) $wpdb->get_var(
+				$wpdb->prepare(
+					'
+			SELECT COUNT(*) FROM %i AS b
 			WHERE b.pet_id = %d
 			AND b.start_gmt <= %s
 			AND b.end_gmt >= %s
-			AND ( b.booking_kind IS NULL OR b.booking_kind = '' OR b.booking_kind <> %s )
-		";
-		$args = array( $pet_id, $now_gmt, $now_gmt, 'clinic' );
-
-		if ( ! empty( $exclude_statuses ) ) {
-			$placeholders = implode( ',', array_fill( 0, count( $exclude_statuses ), '%s' ) );
-			$sql          = $sql . " AND b.status NOT IN ( {$placeholders} ) ";
-			$args         = array_merge( $args, $exclude_statuses );
+			AND ( b.booking_kind IS NULL OR b.booking_kind = \'\' OR b.booking_kind <> %s )',
+					$table,
+					$pet_id,
+					$now_gmt,
+					$now_gmt,
+					'clinic'
+				)
+			);
+		} else {
+			$st_ph = implode( ',', array_fill( 0, count( $exclude_statuses ), '%s' ) );
+			$count = (int) $wpdb->get_var(
+				$wpdb->prepare(
+					'
+			SELECT COUNT(*) FROM %i AS b
+			WHERE b.pet_id = %d
+			AND b.start_gmt <= %s
+			AND b.end_gmt >= %s
+			AND ( b.booking_kind IS NULL OR b.booking_kind = \'\' OR b.booking_kind <> %s )
+			AND b.status NOT IN ( ' . $st_ph . ' )',
+					...array_merge(
+						array( $table, $pet_id, $now_gmt, $now_gmt, 'clinic' ),
+						$exclude_statuses
+					)
+				)
+			);
 		}
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- KennelFlow ledger.
-		$count = (int) $wpdb->get_var( $wpdb->prepare( $sql, $args ) );
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
 
 		return $count > 0;
 	}

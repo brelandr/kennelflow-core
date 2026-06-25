@@ -223,7 +223,7 @@ if ( class_exists( 'WooCommerce' ) ) {
 			}
 
 			$table = ltkf_bookings_table_name();
-			if ( ! ltkf_table_exists( $table ) ) {
+			if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 				return;
 			}
 
@@ -239,15 +239,18 @@ if ( class_exists( 'WooCommerce' ) ) {
 					continue;
 				}
 
-				// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Ledger update; table name from helper.
+				// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Ledger update; `%i` table validated above.
 				$rows = $wpdb->query(
 					$wpdb->prepare(
-						"UPDATE {$table} SET status = %s WHERE post_id = %d AND status IN ( 'pending', 'pending_payment' )",
+						'UPDATE %i SET status = %s WHERE post_id = %d AND status IN ( %s, %s )',
+						$table,
 						'confirmed',
-						$booking_post_id
+						$booking_post_id,
+						'pending',
+						'pending_payment'
 					)
 				);
-				// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 				if ( false === $rows || $rows < 1 ) {
 					continue;
@@ -511,21 +514,35 @@ if ( class_exists( 'WooCommerce' ) ) {
 		 */
 		protected static function get_booking_row( $booking_id ) {
 			$table = ltkf_bookings_table_name();
-			if ( ! ltkf_table_exists( $table ) ) {
+			if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 				return null;
 			}
 
 			global $wpdb;
 
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name from helper; single booking lookup.
-			$row = $wpdb->get_row( $wpdb->prepare( "SELECT post_id, booking_kind FROM {$table} WHERE post_id = %d LIMIT 1", $booking_id ) );
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Single booking lookup; `%i` table validated above.
+			$row = $wpdb->get_row(
+				$wpdb->prepare(
+					'SELECT post_id, booking_kind FROM %i WHERE post_id = %d LIMIT 1',
+					$table,
+					$booking_id
+				)
+			);
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 			if ( is_object( $row ) ) {
 				return $row;
 			}
 
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name from helper; single booking lookup.
-			$row = $wpdb->get_row( $wpdb->prepare( "SELECT post_id, booking_kind FROM {$table} WHERE id = %d LIMIT 1", $booking_id ) );
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
+			$row = $wpdb->get_row(
+				$wpdb->prepare(
+					'SELECT post_id, booking_kind FROM %i WHERE id = %d LIMIT 1',
+					$table,
+					$booking_id
+				)
+			);
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
 
 			return is_object( $row ) ? $row : null;
 		}
