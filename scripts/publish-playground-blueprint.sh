@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+#
+# Publish WordPress Playground blueprint to WordPress.org SVN root assets/blueprints/.
+# Also ensures trunk/assets/blueprints/ is present (run full deploy for tag releases).
+#
+# Usage (from plugin directory):
+#   ./scripts/publish-playground-blueprint.sh
+#   ./scripts/publish-playground-blueprint.sh --commit
+#
+set -euo pipefail
+
+PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SLUG="$(basename "$PLUGIN_ROOT")"
+SVN_URL="https://plugins.svn.wordpress.org/${SLUG}"
+if [[ -z "${SVN_DIR:-}" ]]; then
+	for candidate in \
+		"$(dirname "$PLUGIN_ROOT")/${SLUG}-svn" \
+		"$(dirname "$PLUGIN_ROOT")/../${SLUG}-wporg-svn" \
+		"$(dirname "$PLUGIN_ROOT")/../${SLUG}-svn"; do
+		if [[ -d "$candidate/.svn" ]]; then
+			SVN_DIR="$candidate"
+			break
+		fi
+	done
+	SVN_DIR="${SVN_DIR:-$(dirname "$PLUGIN_ROOT")/${SLUG}-svn}"
+fi
+BLUEPRINT_SRC="${PLUGIN_ROOT}/assets/blueprints/blueprint.json"
+DO_COMMIT=false
+
+if [[ "${1:-}" == "--commit" ]]; then
+	DO_COMMIT=true
+fi
+
+if [[ ! -f "$BLUEPRINT_SRC" ]]; then
+	echo "ERROR: Missing ${BLUEPRINT_SRC}" >&2
+	exit 1
+fi
+
+if [[ ! -f "${PLUGIN_ROOT}/blueprint.json" ]]; then
+	cp "$BLUEPRINT_SRC" "${PLUGIN_ROOT}/blueprint.json"
+fi
+
+if [[ -d "$SVN_DIR/.svn" ]]; then
+	svn update "$SVN_DIR"
+else
+	rm -rf "$SVN_DIR"
+	svn checkout "$SVN_URL" "$SVN_DIR"
+fi
+
+mkdir -p "${SVN_DIR}/assets/blueprints"
+cp "$BLUEPRINT_SRC" "${SVN_DIR}/assets/blueprints/blueprint.json"
+
+mkdir -p "${SVN_DIR}/trunk/assets/blueprints"
+cp "$BLUEPRINT_SRC" "${SVN_DIR}/trunk/assets/blueprints/blueprint.json"
+
+cd "$SVN_DIR"
+svn add --force assets/blueprints assets/blueprints/blueprint.json trunk/assets/blueprints trunk/assets/blueprints/blueprint.json 2>/dev/null || true
+
+echo "SVN status:"
+svn status assets/blueprints trunk/assets/blueprints
+
+if [[ "$DO_COMMIT" == true ]]; then
+	svn commit -m "Add WordPress Playground blueprint for live preview."
+	echo "Done."
+else
+	echo "Review above, then: cd ${SVN_DIR} && svn commit -m 'Add WordPress Playground blueprint for live preview.'"
+fi

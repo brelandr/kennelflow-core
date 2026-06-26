@@ -1,0 +1,29 @@
+{
+	"$schema": "https://playground.wordpress.net/blueprint-schema.json",
+	"landingPage": "/",
+	"preferredVersions": {
+		"php": "8.2",
+		"wp": "latest"
+	},
+	"steps": [
+		{
+			"step": "login",
+			"username": "admin",
+			"password": "password"
+		},
+		{
+			"step": "installPlugin",
+			"options": {
+				"activate": true
+			},
+			"pluginData": {
+				"resource": "wordpress.org/plugins",
+				"slug": "kennelflow-core"
+			}
+		},
+		{
+			"step": "runPHP",
+			"code": "<?php\nrequire_once '/wordpress/wp-load.php';\n$loc_pt = function_exists( 'ltkf_get_location_post_type' ) ? ltkf_get_location_post_type() : 'kf_location';\nwp_insert_post( array( 'post_title' => 'Main Campus', 'post_type' => $loc_pt, 'post_status' => 'publish' ) );\n$owner_id = username_exists( 'demoowner' );\nif ( ! $owner_id ) {\n\t$owner_id = wp_insert_user( array(\n\t\t'user_login' => 'demoowner',\n\t\t'user_pass' => 'password',\n\t\t'user_email' => 'owner@kennelflow.demo',\n\t\t'role' => 'subscriber',\n\t\t'display_name' => 'Demo Owner',\n\t) );\n}\n$pet_pt = function_exists( 'ltkf_get_pet_post_type' ) ? ltkf_get_pet_post_type() : 'kf_pet';\n$owner_key = function_exists( 'ltkf_get_pet_owner_user_meta_key' ) ? ltkf_get_pet_owner_user_meta_key() : 'kf_owner_user_id';\nforeach ( array( 'Bailey (Golden Retriever)', 'Max (Labrador)' ) as $title ) {\n\t$pid = wp_insert_post( array( 'post_title' => $title, 'post_type' => $pet_pt, 'post_status' => 'publish' ) );\n\tif ( $pid && ! is_wp_error( $pid ) ) {\n\t\tupdate_post_meta( $pid, $owner_key, (int) $owner_id );\n\t}\n}\nif ( class_exists( '\\Landtech\\KennelFlow\\Core\\OwnerPets' ) && $owner_id ) {\n\t\\Landtech\\KennelFlow\\Core\\OwnerPets::rebuild_user_pet_ids( (int) $owner_id );\n}\n$portal = wp_insert_post( array(\n\t'post_title' => 'Pet Owner Portal',\n\t'post_content' => \"<h1>My Pets</h1>\\n\\n[ltkf_dashboard]\\n\\n<p><em>Demo owner: demoowner / password</em></p>\",\n\t'post_status' => 'publish',\n\t'post_type' => 'page',\n) );\nif ( $portal && ! is_wp_error( $portal ) && ! (int) get_option( 'page_on_front' ) ) {\n\tupdate_option( 'show_on_front', 'page' );\n\tupdate_option( 'page_on_front', (int) $portal );\n}"
+		}
+	]
+}

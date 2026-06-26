@@ -15,6 +15,14 @@ Hub foundation for KennelFlow: shared pets/locations, owner-pet linking, contrac
 
 KennelFlow Core registers the shared data model and owner portal building blocks used by KennelFlow Boarding, KennelFlow Vet, GroomPress, and related plugins.
 
+== Try It Live - Preview This Plugin Instantly ==
+
+Try KennelFlow Core in WordPress Playground without installing anything locally. The blueprint installs the plugin from **WordPress.org**, creates a demo location, two pets, a demo pet owner (**demoowner** / **password**), and sets the site homepage to the owner portal with `[ltkf_dashboard]`. Log in as **admin** / **password** to explore **KennelFlow Hub** in wp-admin.
+
+[Preview on WordPress Playground](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/brelandr/kennelflow-core/main/blueprint.json)
+
+The same blueprint ships as `blueprint.json` (repository root) and `assets/blueprints/blueprint.json`. WordPress.org also serves a copy from plugin SVN for directory live preview integration.
+
 == Installation ==
 
 1. Upload the plugin files to `/wp-content/plugins/kennelflow-core`, or install the zip through the Plugins screen.
