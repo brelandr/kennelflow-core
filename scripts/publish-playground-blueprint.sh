@@ -52,9 +52,11 @@ cp "$BLUEPRINT_SRC" "${SVN_DIR}/assets/blueprints/blueprint.json"
 
 mkdir -p "${SVN_DIR}/trunk/assets/blueprints"
 cp "$BLUEPRINT_SRC" "${SVN_DIR}/trunk/assets/blueprints/blueprint.json"
+cp "$BLUEPRINT_SRC" "${SVN_DIR}/trunk/blueprint.json"
+cp "${PLUGIN_ROOT}/readme.txt" "${SVN_DIR}/trunk/readme.txt"
 
 cd "$SVN_DIR"
-svn add --force assets/blueprints assets/blueprints/blueprint.json trunk/assets/blueprints trunk/assets/blueprints/blueprint.json 2>/dev/null || true
+svn add --force assets/blueprints assets/blueprints/blueprint.json trunk/assets/blueprints trunk/assets/blueprints/blueprint.json trunk/blueprint.json 2>/dev/null || true
 
 echo "SVN status:"
 svn status assets/blueprints trunk/assets/blueprints
