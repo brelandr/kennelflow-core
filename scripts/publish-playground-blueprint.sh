@@ -55,11 +55,25 @@ cp "$BLUEPRINT_SRC" "${SVN_DIR}/trunk/assets/blueprints/blueprint.json"
 cp "$BLUEPRINT_SRC" "${SVN_DIR}/trunk/blueprint.json"
 cp "${PLUGIN_ROOT}/readme.txt" "${SVN_DIR}/trunk/readme.txt"
 
+STABLE_TAG="$(grep -E '^Stable tag:' "${PLUGIN_ROOT}/readme.txt" | awk '{print $3}' | tr -d '\r')"
+if [[ -n "$STABLE_TAG" && -d "${SVN_DIR}/tags/${STABLE_TAG}" ]]; then
+	echo "Syncing blueprint to stable tag tags/${STABLE_TAG}/ ..."
+	mkdir -p "${SVN_DIR}/tags/${STABLE_TAG}/assets/blueprints"
+	cp "$BLUEPRINT_SRC" "${SVN_DIR}/tags/${STABLE_TAG}/assets/blueprints/blueprint.json"
+	cp "$BLUEPRINT_SRC" "${SVN_DIR}/tags/${STABLE_TAG}/blueprint.json"
+	cp "${PLUGIN_ROOT}/readme.txt" "${SVN_DIR}/tags/${STABLE_TAG}/readme.txt"
+else
+	echo "Warning: stable tag directory tags/${STABLE_TAG:-?} not found in SVN checkout." >&2
+fi
+
 cd "$SVN_DIR"
 svn add --force assets/blueprints assets/blueprints/blueprint.json trunk/assets/blueprints trunk/assets/blueprints/blueprint.json trunk/blueprint.json 2>/dev/null || true
+if [[ -n "$STABLE_TAG" && -d "tags/${STABLE_TAG}" ]]; then
+	svn add --force "tags/${STABLE_TAG}/assets/blueprints" "tags/${STABLE_TAG}/assets/blueprints/blueprint.json" "tags/${STABLE_TAG}/blueprint.json" 2>/dev/null || true
+fi
 
 echo "SVN status:"
-svn status assets/blueprints trunk/assets/blueprints
+svn status assets/blueprints trunk/assets/blueprints "tags/${STABLE_TAG}/assets/blueprints" 2>/dev/null || svn status assets/blueprints trunk/assets/blueprints
 
 if [[ "$DO_COMMIT" == true ]]; then
 	svn commit -m "Add WordPress Playground blueprint for live preview."
