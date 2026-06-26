@@ -81,14 +81,7 @@
 
 # 📦 SECTION 5: DEPLOYMENT
 
-```bash
-zip -r kennelflow-core.zip . \
-  -x "*/.cursorrules" -x "*/.cursor/*" \
-  -x "*/.git/*" -x "*/.github/*" \
-  -x "*/node_modules/*" -x "*/.DS_Store" \
-  -x "*/vendor/*" \
-  -x "*.zip" -x "*.sh" -x "*.md"
-```
+From the repo root, run `./create-plugin-zip.sh`. It stages via `rsync` (excluding `.git`, `node_modules`, `src`, tests, tooling, dotfiles, etc.) then builds `kennelflow-core.zip` with root folder `kennelflow-core/`. Plain `zip -x '*/node_modules/*'` is unsafe: it skips top-level `node_modules/` on BSD zip.
 
 ---
 
@@ -169,3 +162,55 @@ GENERAL: Follow WordPress Coding Standards. Assume Intelephense WordPress stubs.
 
 ## F. Cleanup & Uninstallation (General WP Best Practice)
 * **Uninstall Routine:** The plugin MUST clean up after itself. Ensure the presence of an `uninstall.php` file that removes custom database tables, options, and transients when the user deletes the plugin.
+
+---
+
+# WordPress.org Plugin Repository Strict Guidelines
+
+## 1. Documentation and Source Code
+* **Repository URLs:** Never hallucinate or insert placeholder repository URLs in the `readme.txt` or plugin headers. Any URL provided must be a valid, active, and publicly accessible repository.
+* **Compiled Assets:** If generating minified or bundled assets (e.g., via npm, Webpack, or React), you MUST remind me to document a public repository containing the uncompiled source code in the `readme.txt`.
+* **Build Instructions:** Always ensure documentation includes the specific build commands (e.g., `npm install` and `npm run build`) required to compile the assets from the source.
+
+## 2. Security and Sanitization
+* **Settings Sanitization:** When using `register_setting()`, strictly evaluate the `sanitize_callback`. 
+* **API Keys/Secrets:** NEVER use `sanitize_text_field()` for API keys, passwords, or secure tokens, as it strips necessary characters. Use an identity callback, or write a dedicated custom sanitization function that safely handles complex alphanumeric strings without degrading the key.
+* **SQL Queries:** All custom database queries must strictly use `$wpdb->prepare()` to prevent SQL injection. No exceptions.
+* **Late Escaping:** Enforce strict late escaping on all data rendered to the screen using standard WP escaping functions (e.g., `esc_html()`, `esc_attr()`).
+
+## 3. Core Architecture & Naming Conventions
+* **Prefixing:** Strictly enforce the unified plugin prefix across all functions, classes, options, hooks, and defines to prevent namespace collisions. Never use generic names.
+* **Core File Inclusions:** Do not use `require_once` or `include` to load WordPress core files (e.g., `wp-admin/includes/upgrade.php`, `media.php`) directly unless you are immediately invoking a required function from that file on the very next line. Always prefer action hooks over direct file loading.
+
+---
+
+# 🔒 WORDPRESS.ORG AUDIT COMPLIANCE ADDITIONS
+# Rules derived from real WordPress.org review rejections — do not remove.
+
+## File System: Use WordPress Filesystem API
+* ❌ NEVER use direct PHP file functions: `file_put_contents()`, `file_get_contents()`, `fopen()`, `fwrite()`
+* ✅ ALWAYS use `$wp_filesystem->put_contents()` / `get_contents()` — even in the uploads directory.
+* ❌ Do NOT write PHP stub code (e.g. `<?php // silence is golden`) to the uploads directory. WordPress.org requires empty index.php files to contain `''` (empty string) only.
+
+## AI Providers: WordPress AI Client (WordPress 7.0+)
+* ❌ NEVER call third-party AI providers directly (OpenAI, Anthropic, Google, etc.) via `wp_remote_post()` or any raw HTTP call.
+* ✅ ALWAYS use the WordPress core AI Client: `wp_ai_client_prompt()`.
+* Gate availability with a helper like `is_available()` that checks `function_exists('wp_ai_client_prompt')` and `wp_supports_ai()`. Return a 503 `WP_Error` if unavailable.
+* The plugin MUST NOT store provider API keys — site admins configure providers under **Settings → Connectors**.
+* Document usage under `== External Services ==` in `readme.txt`.
+
+## REST API: permission_callback
+* ❌ NEVER use `'permission_callback' => '__return_true'` directly.
+* ✅ For intentionally public endpoints (e.g. inbound webhooks), create a named method with a docblock explaining WHY the route is public and how authentication is handled inside the callback instead.
+
+## I18n: No load_plugin_textdomain()
+* ❌ Do NOT call `load_plugin_textdomain()`. WordPress auto-loads translations since 4.6.
+* Calling it is flagged by WordPress.org reviewers as unnecessary boilerplate.
+
+## Pre-Approval: No SVN/Trac URLs
+* ❌ Do NOT reference `plugins.trac.wordpress.org` or `plugins.svn.wordpress.org` in `readme.txt` before the plugin is approved — those paths do not exist yet and will fail the auditor's link check.
+* ✅ Use the GitHub URL as the sole public source reference until after approval.
+
+## Release: No Orphaned Vendor Files
+* ❌ Before any release zip, confirm there are no stale or undocumented files under `assets/vendor/` or any other vendor directory.
+* ✅ Every bundled third-party file must be either (a) built via the documented npm pipeline or (b) explicitly listed with source URL in `readme.txt`.

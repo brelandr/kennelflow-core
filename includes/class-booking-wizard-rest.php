@@ -18,7 +18,7 @@ class BookingWizardRest {
 	/**
 	 * Cached Kennel Press bookings controller (for permissions + create).
 	 *
-	 * @var KennelFlow_Boarding_REST_Bookings_Controller|null
+	 * @var \KennelFlow_Boarding_REST_Bookings_Controller|null
 	 */
 	protected static $bookings_controller = null;
 
@@ -37,17 +37,17 @@ class BookingWizardRest {
 	 * @return void
 	 */
 	public static function register_routes() {
-		if ( class_exists( 'KennelFlow_Vet_Frontend' ) ) {
+		if ( class_exists( '\KennelFlow_Vet_Frontend' ) ) {
 			return;
 		}
-		if ( ! class_exists( 'KennelFlow_Boarding_REST_Locations_Controller' )
-			|| ! class_exists( 'KennelFlow_Boarding_REST_Availability_Controller' )
-			|| ! class_exists( 'KennelFlow_Boarding_REST_Bookings_Controller' ) ) {
+		if ( ! class_exists( '\KennelFlow_Boarding_REST_Locations_Controller' )
+			|| ! class_exists( '\KennelFlow_Boarding_REST_Availability_Controller' )
+			|| ! class_exists( '\KennelFlow_Boarding_REST_Bookings_Controller' ) ) {
 			return;
 		}
 
-		$loc_ctrl = new KennelFlow_Boarding_REST_Locations_Controller();
-		$avail    = new KennelFlow_Boarding_REST_Availability_Controller();
+		$loc_ctrl = new \KennelFlow_Boarding_REST_Locations_Controller();
+		$avail    = new \KennelFlow_Boarding_REST_Availability_Controller();
 
 		register_rest_route(
 			'kennelflow-vet/v1',
@@ -103,11 +103,11 @@ class BookingWizardRest {
 	/**
 	 * KennelFlow_Boarding_REST_Bookings_Controller instance (for delegation).
 	 *
-	 * @return KennelFlow_Boarding_REST_Bookings_Controller
+	 * @return \KennelFlow_Boarding_REST_Bookings_Controller
 	 */
 	protected static function get_bookings_controller() {
 		if ( null === self::$bookings_controller ) {
-			self::$bookings_controller = new KennelFlow_Boarding_REST_Bookings_Controller();
+			self::$bookings_controller = new \KennelFlow_Boarding_REST_Bookings_Controller();
 		}
 		return self::$bookings_controller;
 	}
@@ -185,7 +185,7 @@ class BookingWizardRest {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public static function get_availability( $request ) {
-		$avail = new KennelFlow_Boarding_REST_Availability_Controller();
+		$avail = new \KennelFlow_Boarding_REST_Availability_Controller();
 		$res   = $avail->get_items( $request );
 		if ( is_wp_error( $res ) ) {
 			return $res;

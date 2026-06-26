@@ -313,13 +313,24 @@ class AdminCalendarApi {
 	}
 
 	/**
+	 * KennelFlow Boarding REST path for booking CRUD proxy (legacy kennelpress/v1 alias also registered).
+	 *
+	 * @param string $suffix Path suffix after /bookings (e.g. '' or '/123').
+	 * @return string REST route path beginning with /.
+	 */
+	protected static function boarding_rest_bookings_path( $suffix = '' ) {
+		$base = defined( 'KENNELFLOW_BOARDING_VERSION' ) ? 'kennelflow-boarding/v1' : 'kennelpress/v1';
+		return '/' . $base . '/bookings' . $suffix;
+	}
+
+	/**
 	 * GET kennelflow/v1/bookings/{id} — single booking (Hub meta keys included).
 	 *
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public static function proxy_get_booking( $request ) {
-		if ( ! class_exists( 'KennelFlow_Boarding_REST_Bookings_Controller' ) ) {
+		if ( ! class_exists( '\KennelFlow_Boarding_REST_Bookings_Controller' ) ) {
 			return new \WP_Error(
 				'ltkf_kennelpress_required',
 				__( 'Kennel Press must be active to load bookings.', 'kennelflow-core' ),
@@ -328,7 +339,7 @@ class AdminCalendarApi {
 		}
 
 		$id  = absint( $request['id'] );
-		$sub = new \WP_REST_Request( 'GET', '/kennelpress/v1/bookings/' . $id );
+		$sub = new \WP_REST_Request( 'GET', self::boarding_rest_bookings_path( '/' . $id ) );
 		$sub->set_param( 'id', $id );
 
 		return self::maybe_enrich_booking_rest_response( rest_do_request( $sub ) );
@@ -341,7 +352,7 @@ class AdminCalendarApi {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public static function proxy_patch_booking( $request ) {
-		if ( ! class_exists( 'KennelFlow_Boarding_REST_Bookings_Controller' ) ) {
+		if ( ! class_exists( '\KennelFlow_Boarding_REST_Bookings_Controller' ) ) {
 			return new \WP_Error(
 				'ltkf_kennelpress_required',
 				__( 'Kennel Press must be active to update bookings.', 'kennelflow-core' ),
@@ -350,7 +361,7 @@ class AdminCalendarApi {
 		}
 
 		$id  = absint( $request['id'] );
-		$sub = new \WP_REST_Request( 'PATCH', '/kennelpress/v1/bookings/' . $id );
+		$sub = new \WP_REST_Request( 'PATCH', self::boarding_rest_bookings_path( '/' . $id ) );
 		$sub->set_param( 'id', $id );
 
 		$params = $request->get_params();
@@ -371,7 +382,7 @@ class AdminCalendarApi {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public static function proxy_create_booking( $request ) {
-		if ( ! class_exists( 'KennelFlow_Boarding_REST_Bookings_Controller' ) ) {
+		if ( ! class_exists( '\KennelFlow_Boarding_REST_Bookings_Controller' ) ) {
 			return new \WP_Error(
 				'ltkf_kennelpress_required',
 				__( 'Kennel Press must be active to create bookings.', 'kennelflow-core' ),
@@ -382,7 +393,7 @@ class AdminCalendarApi {
 		$params = $request->get_params();
 		$params = self::map_hub_prefixed_meta_to_kennelpress_keys( $params );
 
-		$sub = new \WP_REST_Request( 'POST', '/kennelpress/v1/bookings' );
+		$sub = new \WP_REST_Request( 'POST', self::boarding_rest_bookings_path() );
 		foreach ( $params as $key => $value ) {
 			$sub->set_param( $key, $value );
 		}

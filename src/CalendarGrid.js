@@ -253,8 +253,9 @@ export function CalendarGrid( {
 					? ( Array.isArray( resp.resources ) ? resp.resources : undefined )
 					: undefined;
 				return { bookings, resources };
-			} catch {
-				return { bookings: [], resources: undefined };
+			} catch ( err ) {
+				const message = getCalendarPatchErrorMessage( err );
+				throw new Error( message || __( 'Could not load calendar.', 'kennelflow-core' ) );
 			}
 		},
 	} );
@@ -288,44 +289,69 @@ export function CalendarGrid( {
 	}, [ weekStart ] );
 
 	const resources = useMemo( () => {
+		const normalizeRow = ( r ) => {
+			const id = parseInt( r.id, 10 );
+			const safeId = Number.isNaN( id ) ? 0 : id;
+			return {
+				id: safeId,
+				title:
+					r.title && String( r.title ).trim() !== ''
+						? String( r.title )
+						: sprintf(
+								/* translators: %d: resource id */
+								__( 'Resource %d', 'kennelflow-core' ),
+								safeId
+						  ),
+			};
+		};
+
+		const list = bookings || [];
+		const byId = new Map();
+
 		if ( Array.isArray( explicitResources ) && explicitResources.length > 0 ) {
-			return explicitResources.map( ( r ) => {
-				const id = parseInt( r.id, 10 );
-				return {
-					id: Number.isNaN( id ) ? 0 : id,
-					title:
-						r.title && String( r.title ).trim() !== ''
-							? String( r.title )
-							: sprintf(
-									/* translators: %d: resource id */
-									__( 'Resource %d', 'kennelflow-core' ),
-									id
-							  ),
-				};
+			explicitResources.forEach( ( r ) => {
+				const row = normalizeRow( r );
+				byId.set( row.id, row );
 			} );
 		}
-		const list = bookings || [];
-		const ids = new Set();
+
 		list.forEach( ( b ) => {
 			const rid = parseInt( b.resource_id, 10 );
-			ids.add( Number.isNaN( rid ) ? 0 : rid );
+			const key = Number.isNaN( rid ) ? 0 : rid;
+			if ( ! byId.has( key ) ) {
+				byId.set(
+					key,
+					normalizeRow( {
+						id: key,
+						title:
+							key > 0
+								? sprintf(
+										/* translators: %d: resource id (kennel / room) */
+										__( 'Resource %d', 'kennelflow-core' ),
+										key
+								  )
+								: __( 'Unassigned', 'kennelflow-core' ),
+					} )
+				);
+			}
 		} );
-		if ( ids.size < 1 ) {
-			ids.add( 0 );
+
+		if ( byId.size < 1 ) {
+			byId.set(
+				0,
+				normalizeRow( {
+					id: 0,
+					title: __( 'Unassigned', 'kennelflow-core' ),
+				} )
+			);
 		}
-		return Array.from( ids )
-			.sort( ( a, b ) => a - b )
-			.map( ( id ) => ( {
-				id,
-				title:
-					id > 0
-						? sprintf(
-								/* translators: %d: resource id (kennel / room) */
-								__( 'Resource %d', 'kennelflow-core' ),
-								id
-						  )
-						: __( 'Unassigned', 'kennelflow-core' ),
-			} ) );
+
+		return Array.from( byId.values() ).sort( ( a, b ) => {
+			if ( a.id === b.id ) {
+				return 0;
+			}
+			return a.id - b.id;
+		} );
 	}, [ bookings, explicitResources ] );
 
 	const eventsByResource = useMemo( () => {
@@ -578,6 +604,18 @@ export function CalendarGrid( {
 
 	if ( calendarQuery.isPending && undefined === calendarQuery.data ) {
 		return <div className="kf-cal-loading">{ __( 'Loading…', 'kennelflow-core' ) }</div>;
+	}
+
+	if ( calendarQuery.isError ) {
+		const errMsg =
+			calendarQuery.error && calendarQuery.error.message
+				? String( calendarQuery.error.message )
+				: __( 'Could not load calendar.', 'kennelflow-core' );
+		return (
+			<div className="kf-cal-error notice notice-error">
+				<p>{ errMsg }</p>
+			</div>
+		);
 	}
 
 	return (

@@ -4,7 +4,7 @@ Tags: pets, kennel, boarding, hub
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 0.2.2
+Stable tag: 0.2.3
 Text Domain: kennelflow-core
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -77,6 +77,14 @@ No. Core features work without it. Checkout, deposits, and portal payment button
 16. Demo Data Sandbox — generate or wipe tagged demo content for staging sites.
 
 == Changelog ==
+
+= 0.2.3 =
+* Hub calendar: grooming and other views build resource rows from bookings when the REST API returns no explicit resources (fixes empty grooming schedule).
+* Hub calendar: show a clear error message when calendar data fails to load instead of a blank grid.
+* Hub calendar REST proxy and booking modal: use KennelFlow Boarding namespace (`kennelflow-boarding/v1`) with legacy `kennelpress/v1` fallback.
+* Booking wizard REST: PHP 8 global namespace fixes for KennelFlow Boarding controller classes.
+* Requires Plugins: dependency slug mapper for legacy plugin folders (`groompress/`, `kennelpress/`, `vetpress/`).
+* WordPress.org listing assets: updated banner images.
 
 = 0.2.2 =
 * Hub admin calendar REST API: PHP 8 namespace fixes for calendar, booking, and related endpoints.

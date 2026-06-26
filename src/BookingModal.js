@@ -151,6 +151,14 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 	const kennelpressBookings = settings.kennelpress_bookings_url || '';
 	const bookingsCreatePath =
 		settings.bookings_create_path || '/kennelflow/v1/bookings';
+	const boardingRestBase = useMemo( () => {
+		const raw =
+			settings.kennelflow_boarding_rest_base &&
+			'string' === typeof settings.kennelflow_boarding_rest_base
+				? settings.kennelflow_boarding_rest_base
+				: 'kennelpress/v1';
+		return String( raw ).replace( /^\/+|\/+$/g, '' );
+	}, [ settings.kennelflow_boarding_rest_base ] );
 
 	const modalEnabled = open && !! kennelpressBookings;
 
@@ -160,7 +168,7 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 			let fac = null;
 			try {
 				fac = await apiFetch( {
-					path: '/kennelpress/v1/facility-settings',
+					path: `/${ boardingRestBase }/facility-settings`,
 				} );
 			} catch {
 				fac = null;
@@ -235,7 +243,7 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 		queryKey: [ 'resources', 'kennels', locationId ],
 		queryFn: async () => {
 			const res = await apiFetch( {
-				path: `/kennelpress/v1/kennels?location=${ locationId }&per_page=100`,
+				path: `/${ boardingRestBase }/kennels?location=${ locationId }&per_page=100`,
 			} );
 			return res && Array.isArray( res.kennels ) ? res.kennels : [];
 		},
@@ -250,7 +258,7 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 		queryKey: [ 'resources', 'intake', locationId, intakeContext ],
 		queryFn: async () => {
 			const res = await apiFetch( {
-				path: `/kennelpress/v1/booking-intake-resources?location=${ locationId }&context=${ intakeContext }`,
+				path: `/${ boardingRestBase }/booking-intake-resources?location=${ locationId }&context=${ intakeContext }`,
 			} );
 			return {
 				users: res && Array.isArray( res.users ) ? res.users : [],
@@ -268,7 +276,7 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 		queryKey: [ 'resources', 'pet-care', petId ],
 		queryFn: async () => {
 			const data = await apiFetch( {
-				path: `/kennelpress/v1/pets/${ petId }/care-defaults`,
+				path: `/${ boardingRestBase }/pets/${ petId }/care-defaults`,
 			} );
 			return data && 'object' === typeof data ? data : null;
 		},
@@ -307,7 +315,9 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 		queryKey: [ 'kp-avail-base', locationId, startUtc, endUtc ],
 		queryFn: async () => {
 			const path =
-				'/kennelpress/v1/availability?location=' +
+				'/' +
+				boardingRestBase +
+				'/availability?location=' +
 				locationId +
 				'&start=' +
 				encodeURIComponent( startUtc ) +
@@ -331,7 +341,9 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 		],
 		queryFn: async () => {
 			const path =
-				'/kennelpress/v1/availability?location=' +
+				'/' +
+				boardingRestBase +
+				'/availability?location=' +
 				locationId +
 				'&start=' +
 				encodeURIComponent( startUtc ) +

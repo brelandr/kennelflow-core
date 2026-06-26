@@ -44,14 +44,14 @@ function mountCalendarGrid( mountEl ) {
 	const bookingKind                = mountEl.dataset.bookingKind || '';
 	const cornerLabel                = mountEl.dataset.cornerLabel || '';
 	createRoot( mountEl ).render(
-		< QueryClientProvider client = { queryClient } >
-			< CalendarGrid
-				initialStartDate     = { start }
-				initialEndDate       = { end }
-				bookingKind          = { bookingKind }
-				cornerLabel          = { cornerLabel }
-			/ >
-		< / QueryClientProvider >
+		<QueryClientProvider client={ queryClient }>
+			<CalendarGrid
+				initialStartDate={ start }
+				initialEndDate={ end }
+				bookingKind={ bookingKind }
+				cornerLabel={ cornerLabel }
+			/>
+		</QueryClientProvider>
 	);
 }
 
