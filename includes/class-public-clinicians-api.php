@@ -97,13 +97,9 @@ class PublicCliniciansApi {
 			);
 		}
 
-		$loc_pt = function_exists( 'ltkf_get_location_post_type' ) ? ltkf_get_location_post_type() : 'kf_location';
-		if ( get_post_type( $location_id ) !== $loc_pt ) {
-			return new \WP_Error(
-				'rest_invalid_param',
-				__( 'location_id does not refer to a valid location.', 'kennelflow-core' ),
-				array( 'status' => 400 )
-			);
+		$location_id = self::resolve_hub_location_id( $location_id );
+		if ( is_wp_error( $location_id ) ) {
+			return $location_id;
 		}
 
 		$role_slugs = apply_filters( 'ltkf_public_clinicians_role_slugs', self::get_default_role_slugs() );
@@ -218,5 +214,39 @@ class PublicCliniciansApi {
 		set_transient( $cache_key, $out, DAY_IN_SECONDS );
 
 		return rest_ensure_response( $out );
+	}
+
+	/**
+	 * Normalize location_id to a Hub kf_location post ID.
+	 *
+	 * Accepts either a Hub location post ID or a KennelFlow Vet kfvet_location term ID
+	 * (booking wizard passes clinic term IDs).
+	 *
+	 * @param int $location_id Requested location or clinic term ID.
+	 * @return int|\WP_Error Hub location post ID or error.
+	 */
+	protected static function resolve_hub_location_id( $location_id ) {
+		$location_id = absint( $location_id );
+		$loc_pt      = function_exists( 'ltkf_get_location_post_type' ) ? ltkf_get_location_post_type() : 'kf_location';
+
+		if ( get_post_type( $location_id ) === $loc_pt ) {
+			return $location_id;
+		}
+
+		if ( function_exists( 'kfvet_get_hub_location_id_for_vet_term' ) && taxonomy_exists( 'kfvet_location' ) ) {
+			$term = get_term( $location_id, 'kfvet_location' );
+			if ( $term instanceof \WP_Term && ! is_wp_error( $term ) ) {
+				$hub_id = absint( kfvet_get_hub_location_id_for_vet_term( $location_id ) );
+				if ( $hub_id > 0 && get_post_type( $hub_id ) === $loc_pt ) {
+					return $hub_id;
+				}
+			}
+		}
+
+		return new \WP_Error(
+			'rest_invalid_param',
+			__( 'location_id does not refer to a valid location.', 'kennelflow-core' ),
+			array( 'status' => 400 )
+		);
 	}
 }

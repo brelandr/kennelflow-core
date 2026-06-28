@@ -1,5 +1,5 @@
 === KennelFlow Core ===
-Contributors: brelandr, landtechwebdesigns
+Contributors: brelandr
 Tags: pets, kennel, boarding, hub
 Requires at least: 6.2
 Tested up to: 7.0
