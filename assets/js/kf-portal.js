@@ -238,7 +238,34 @@
 						)
 						.then(
 							function ( r ) {
-								return r.json();
+								return r.text().then(
+									function ( text ) {
+										if ( ! text ) {
+											return { success: false, data: { message: wv.strings.invalidResp } };
+										}
+										try {
+											return JSON.parse( text );
+										} catch ( parseErr ) {
+											if ( '0' === text || '-1' === text ) {
+												return {
+													success: false,
+													data: {
+														message: wv.strings.invalidResp,
+													},
+												};
+											}
+											if ( ! r.ok ) {
+												return {
+													success: false,
+													data: {
+														message: wv.strings.invalidResp,
+													},
+												};
+											}
+											throw parseErr;
+										}
+									}
+								);
 							}
 						)
 						.then(
@@ -324,15 +351,98 @@
 				if ( ! wrap ) {
 					return;
 				}
-				var pet      = wrap.querySelector( '[data-kf-wl-pet]' );
+				var petsWrap = wrap.querySelector( '[data-kf-wl-pets]' );
 				var loc      = wrap.querySelector( '[data-kf-wl-location]' );
 				var st       = wrap.querySelector( '[data-kf-wl-start]' );
 				var en       = wrap.querySelector( '[data-kf-wl-end]' );
 				var btnCheck = wrap.querySelector( '[data-kf-wl-check]' );
+				var btnBook  = wrap.querySelector( '[data-kf-wl-book]' );
 				var btnJoin  = wrap.querySelector( '[data-kf-wl-join]' );
 				var msg      = wrap.querySelector( '[data-kf-wl-msg]' );
-				if ( ! pet || ! loc || ! st || ! en || ! btnCheck || ! btnJoin || ! msg ) {
+				if ( ! petsWrap || ! loc || ! st || ! en || ! btnCheck || ! btnJoin || ! msg ) {
 					return;
+				}
+
+				function getSelectedPetIds() {
+					var ids = [];
+					petsWrap.querySelectorAll( 'input[data-kf-wl-pet-id]:checked' ).forEach(
+						function ( input ) {
+							var id = parseInt( input.value, 10 ) || 0;
+							if ( id > 0 && ids.indexOf( id ) === -1 ) {
+								ids.push( id );
+							}
+						}
+					);
+					return ids;
+				}
+
+				function petsMayBookOnline() {
+					if ( ! wl.onlineBoardingEnabled || ! wl.bookingPageUrl ) {
+						return false;
+					}
+					var ids = getSelectedPetIds();
+					if ( ids.length < 1 || ! wl.eligiblePetIds || ! wl.eligiblePetIds.length ) {
+						return false;
+					}
+					return ids.every(
+						function ( id ) {
+							return wl.eligiblePetIds.indexOf( id ) !== -1;
+						}
+					);
+				}
+
+				function buildBookingUrl() {
+					var base = wl.bookingPageUrl || '';
+					if ( ! base ) {
+						return '';
+					}
+					var ids = getSelectedPetIds();
+					var params = new URLSearchParams();
+					params.set( 'kf_kind', 'boarding' );
+					params.set( 'kf_check_availability', '1' );
+					if ( ids.length === 1 ) {
+						params.set( 'kf_pet_id', String( ids[0] ) );
+					} else if ( ids.length > 1 ) {
+						params.set( 'kf_pet_ids', ids.join( ',' ) );
+					}
+					if ( loc.value ) {
+						params.set( 'kf_location', loc.value );
+					}
+					if ( st.value ) {
+						params.set( 'kf_start', st.value );
+					}
+					if ( en.value ) {
+						params.set( 'kf_end', en.value );
+					}
+					var join = base.indexOf( '?' ) >= 0 ? '&' : '?';
+					return base + join + params.toString();
+				}
+
+				function hideBookCta() {
+					if ( btnBook ) {
+						btnBook.hidden = true;
+						btnBook.setAttribute( 'href', '#' );
+					}
+				}
+
+				function showAvailableOutcome() {
+					hideBookCta();
+					btnJoin.hidden   = true;
+					btnJoin.disabled = true;
+					if ( wl.onlineBoardingEnabled && wl.bookingPageUrl ) {
+						if ( petsMayBookOnline() ) {
+							msg.textContent = wl.strings.availableOnline || wl.strings.available;
+							if ( btnBook ) {
+								btnBook.textContent = wl.strings.bookOnline || btnBook.textContent;
+								btnBook.href        = buildBookingUrl();
+								btnBook.hidden      = false;
+							}
+							return;
+						}
+						msg.textContent = wl.strings.availableNeedCompliance || wl.strings.available;
+						return;
+					}
+					msg.textContent = wl.strings.available;
 				}
 
 				function wlToast( text, type ) {
@@ -357,9 +467,10 @@
 					'click',
 					function () {
 						msg.textContent  = '';
+						hideBookCta();
 						btnJoin.hidden   = true;
 						btnJoin.disabled = true;
-						if ( ! pet.value || ! loc.value || ! st.value || ! en.value ) {
+						if ( getSelectedPetIds().length < 1 || ! loc.value || ! st.value || ! en.value ) {
 							msg.textContent = wl.strings.needDates;
 							return;
 						}
@@ -401,7 +512,7 @@
 									btnJoin.hidden   = false;
 									btnJoin.disabled = false;
 								} else {
-									msg.textContent = wl.strings.available;
+									showAvailableOutcome();
 								}
 							}
 						)
@@ -422,7 +533,8 @@
 						msg.textContent = '';
 						var startUtc    = toUtcMysql( st.value );
 						var endUtc      = toUtcMysql( en.value );
-						if ( ! pet.value || ! loc.value || ! startUtc || ! endUtc ) {
+						var selectedPetIds = getSelectedPetIds();
+						if ( selectedPetIds.length < 1 || ! loc.value || ! startUtc || ! endUtc ) {
 							msg.textContent = wl.strings.needDates;
 							return;
 						}
@@ -432,7 +544,7 @@
 						var params          = new URLSearchParams();
 						params.set( 'action', wl.action );
 						params.set( '_wpnonce', wl.nonce );
-						params.set( 'pet_id', pet.value );
+						params.set( 'pet_id', String( selectedPetIds[0] ) );
 						params.set( 'location_id', loc.value );
 						params.set( 'start_gmt', startUtc );
 						params.set( 'end_gmt', endUtc );
@@ -600,11 +712,14 @@
 										( st.pendingReview || '' ) +
 										'</span>';
 									}
-									var waitlist = root.querySelector( '[data-kf-wl-pet]' );
-									if ( waitlist ) {
-											var opt = waitlist.querySelector( 'option[value="' + petId + '"]' );
-										if ( opt ) {
-											opt.setAttribute( 'disabled', 'disabled' );
+									var waitlistPets = root.querySelector( '[data-kf-wl-pets]' );
+									if ( waitlistPets ) {
+										var chk = waitlistPets.querySelector(
+											'input[data-kf-wl-pet-id="' + petId + '"]'
+										);
+										if ( chk ) {
+											chk.setAttribute( 'disabled', 'disabled' );
+											chk.checked = false;
 										}
 									}
 									return;
@@ -641,6 +756,113 @@
 			}
 
 			initComplianceUpload();
+
+			function initAddPet() {
+				if (
+				typeof kfPortalVars === 'undefined' ||
+				! kfPortalVars.addPet ||
+				! kfPortalVars.addPet.enabled ||
+				! kfPortalVars.addPet.restUrl
+				) {
+					return;
+				}
+				var ap   = kfPortalVars.addPet;
+				var st   = ap.strings || {};
+				var form = root.querySelector( '[data-kf-add-pet-form]' );
+				if ( ! form ) {
+					return;
+				}
+				var input = form.querySelector( '[data-kf-add-pet-name]' );
+				var btn   = form.querySelector( '[data-kf-add-pet-submit]' );
+				var msgEl = form.querySelector( '[data-kf-add-pet-msg]' );
+
+				function showMsg( text, isError ) {
+					if ( ! msgEl ) {
+						return;
+					}
+					msgEl.textContent = text || '';
+					msgEl.hidden      = ! text;
+					msgEl.classList.toggle( 'kf-portal__add-pet-msg--error', !! isError );
+				}
+
+				form.addEventListener(
+					'submit',
+					function ( e ) {
+						e.preventDefault();
+						var title = input ? String( input.value || '' ).trim() : '';
+						if ( ! title ) {
+							showMsg( st.needName || '', true );
+							if ( input ) {
+								input.focus();
+							}
+							return;
+						}
+						showMsg( '', false );
+						if ( btn ) {
+							btn.disabled    = true;
+							btn.textContent = st.saving || '';
+						}
+
+						fetch(
+							ap.restUrl,
+							{
+								method: 'POST',
+								credentials: 'same-origin',
+								headers: {
+									'Content-Type': 'application/json',
+									'X-WP-Nonce': ap.restNonce || '',
+								},
+								body: JSON.stringify( { title: title } ),
+							}
+						)
+						.then(
+							function ( r ) {
+								return r.json().then(
+									function ( body ) {
+										return { ok: r.ok, body: body };
+									}
+								);
+							}
+						)
+						.then(
+							function ( res ) {
+								if ( res.ok && res.body && res.body.id ) {
+										showMsg( st.saved || '', false );
+										window.location.reload();
+										return;
+								}
+								var errMsg = st.error || '';
+								if ( res.body && res.body.message ) {
+									errMsg = res.body.message;
+								}
+								showMsg( errMsg, true );
+								if ( window.KFToast ) {
+									KFToast.show( errMsg, { type: 'error' } );
+								}
+							}
+						)
+						.catch(
+							function () {
+								var netMsg = st.network || '';
+								showMsg( netMsg, true );
+								if ( window.KFToast ) {
+									KFToast.show( netMsg, { type: 'error' } );
+								}
+							}
+						)
+						.finally(
+							function () {
+								if ( btn ) {
+									btn.disabled    = false;
+									btn.textContent = st.submit || '';
+								}
+							}
+						);
+					}
+				);
+			}
+
+			initAddPet();
 
 			root.addEventListener(
 				'click',

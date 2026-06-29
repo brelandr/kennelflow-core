@@ -12,6 +12,12 @@ import { __, sprintf } from '@wordpress/i18n';
 import { DateTime } from 'luxon';
 
 import { BookingDatetimePicker } from './BookingDatetimePicker';
+import {
+	formatApiFetchError,
+	isCalendarDebugEnabled,
+	logCalendarTrace,
+} from './calendarDebug';
+import { renderInBodyPortal } from './calendarPortal';
 
 /**
  * Avoid "Dr. Dr. Smith" when the directory name already includes a title.
@@ -130,13 +136,42 @@ function getLocationDisplayTitle( locationsList, locId ) {
 }
 
 /**
+ * Pet dropdown label: "Pet name · Owner name" (matches calendar event titles).
+ *
+ * @param {{ id: number|string, title?: { rendered?: string }, owner_name?: string }} pet
+ * @return {string}
+ */
+function formatPetSelectLabel( pet ) {
+	const petName =
+		pet.title && pet.title.rendered && String( pet.title.rendered ).trim() !== ''
+			? String( pet.title.rendered ).trim()
+			: `#${ pet.id }`;
+	const ownerName =
+		pet.owner_name && String( pet.owner_name ).trim() !== ''
+			? String( pet.owner_name ).trim()
+			: '';
+	if ( '' === ownerName ) {
+		return petName;
+	}
+	return sprintf(
+		/* translators: 1: pet name, 2: owner display name */
+		__( '%1$s · %2$s', 'kennelflow-core' ),
+		petName,
+		ownerName
+	);
+}
+
+/**
  * @param {object}   props
  * @param {boolean}  props.open
  * @param {Function} props.onClose
  * @param {Function} [props.onSaved] Optional extra callback after save (calendar uses query invalidation).
+ * @param {Function} [props.onError] Optional callback when modal render fails.
  * @param {{ start: string, end: string }} props.weekRange UTC Y-m-d bounds from calendar.
+ * @param {string} [props.defaultBookingKind] Default kind when modal opens (e.g. grooming).
+ * @param {'booking'|'walk_in'} [props.mode] Walk-in opens with now + checked-in defaults.
  */
-export function BookingModal( { open, onClose, onSaved, weekRange } ) {
+export function BookingModal( { open, onClose, onSaved, onError, weekRange, defaultBookingKind = '', mode = 'booking' } ) {
 	const queryClient = useQueryClient();
 	const settings =
 		typeof window !== 'undefined' && window.kfCalendarSettings
@@ -151,6 +186,13 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 	const kennelpressBookings = settings.kennelpress_bookings_url || '';
 	const bookingsCreatePath =
 		settings.bookings_create_path || '/kennelflow/v1/bookings';
+	const resolvedDefaultKind =
+		defaultBookingKind && String( defaultBookingKind ).trim() !== ''
+			? String( defaultBookingKind ).trim().toLowerCase()
+			: settings.default_booking_kind &&
+			  String( settings.default_booking_kind ).trim() !== ''
+			? String( settings.default_booking_kind ).trim().toLowerCase()
+			: 'boarding';
 	const boardingRestBase = useMemo( () => {
 		const raw =
 			settings.kennelflow_boarding_rest_base &&
@@ -159,6 +201,14 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 				: 'kennelpress/v1';
 		return String( raw ).replace( /^\/+|\/+$/g, '' );
 	}, [ settings.kennelflow_boarding_rest_base ] );
+
+	const isWalkInMode = 'walk_in' === mode;
+	const walkInKind =
+		'clinic' === resolvedDefaultKind ? 'clinic' : resolvedDefaultKind || 'clinic';
+
+	const modalTitle = isWalkInMode
+		? __( 'Add walk-in', 'kennelflow-core' )
+		: __( 'Add booking', 'kennelflow-core' );
 
 	const modalEnabled = open && !! kennelpressBookings;
 
@@ -202,7 +252,7 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 	} );
 
 	const [ tab, setTab ] = useState( 'care_instructions' );
-	const [ bookingKind, setBookingKind ] = useState( 'boarding' );
+	const [ bookingKind, setBookingKind ] = useState( resolvedDefaultKind );
 	const [ locationId, setLocationId ] = useState( 0 );
 	const [ resourceId, setResourceId ] = useState( 0 );
 	/** Exam room = kennelpress_kennel post ID (0 = none). */
@@ -228,6 +278,7 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 
 	const dietTouchedRef = useRef( false );
 	const lastWeekFacilityKeyRef = useRef( '' );
+	const walkInTimesKeyRef = useRef( '' );
 	const rosterAutoLocationSigRef = useRef( '' );
 
 	const facilityPayload = useMemo( () => {
@@ -238,6 +289,37 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 	}, [ bootstrapQuery.data ] );
 
 	const locations = bootstrapQuery.data?.locations ?? [];
+
+	const getTimezoneForLocation = useCallback(
+		( locId ) => {
+			const id = parseInt( locId, 10 ) || 0;
+			if (
+				id > 0 &&
+				facilityPayload &&
+				'object' === typeof facilityPayload &&
+				Array.isArray( facilityPayload.locations )
+			) {
+				const row = facilityPayload.locations.find(
+					( x ) => parseInt( x.id, 10 ) === id
+				);
+				if (
+					row &&
+					row.settings &&
+					row.settings.timezone &&
+					'string' === typeof row.settings.timezone
+				) {
+					return String( row.settings.timezone );
+				}
+			}
+			return siteTimezone;
+		},
+		[ facilityPayload, siteTimezone ]
+	);
+
+	const locationTimezone = useMemo(
+		() => getTimezoneForLocation( locationId ),
+		[ getTimezoneForLocation, locationId ]
+	 );
 
 	const kennelsQuery = useQuery( {
 		queryKey: [ 'resources', 'kennels', locationId ],
@@ -499,44 +581,16 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 
 	const loadErr =
 		bootstrapQuery.isError && bootstrapQuery.error
-			? String(
-					bootstrapQuery.error.message ||
-						__( 'Could not load locations.', 'kennelflow-core' )
+			? formatApiFetchError(
+					bootstrapQuery.error,
+					__( 'Could not load locations.', 'kennelflow-core' )
 			  )
 			: '';
 
-	const getTimezoneForLocation = useCallback(
-		( locId ) => {
-			const id = parseInt( locId, 10 ) || 0;
-			if (
-				id > 0 &&
-				facilityPayload &&
-				'object' === typeof facilityPayload &&
-				Array.isArray( facilityPayload.locations )
-			) {
-				const row = facilityPayload.locations.find(
-					( x ) => parseInt( x.id, 10 ) === id
-				);
-				if (
-					row &&
-					row.settings &&
-					row.settings.timezone &&
-					'string' === typeof row.settings.timezone
-				) {
-					return String( row.settings.timezone );
-				}
-			}
-			return siteTimezone;
-		},
-		[ facilityPayload, siteTimezone ]
-	);
-
-	const locationTimezone = useMemo(
-		() => getTimezoneForLocation( locationId ),
-		[ getTimezoneForLocation, locationId ]
-	);
-
 	const resetDefaultsForWeek = useCallback( () => {
+		if ( isWalkInMode ) {
+			return;
+		}
 		const s = weekRange && weekRange.start ? weekRange.start : '';
 		const e = weekRange && weekRange.end ? weekRange.end : '';
 		let z = getTimezoneForLocation( locationId );
@@ -561,7 +615,25 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 		);
 		setStartUtc( startLocal.toUTC().toFormat( 'yyyy-MM-dd HH:mm:ss' ) );
 		setEndUtc( endLocal.toUTC().toFormat( 'yyyy-MM-dd HH:mm:ss' ) );
-	}, [ weekRange, locationId, getTimezoneForLocation, siteTimezone ] );
+	}, [ weekRange, locationId, getTimezoneForLocation, siteTimezone, isWalkInMode ] );
+
+	const resetWalkInTimes = useCallback( () => {
+		let z = getTimezoneForLocation( locationId );
+		const zTest = DateTime.now().setZone( z );
+		if ( ! zTest.isValid ) {
+			z = siteTimezone;
+		}
+		const now = DateTime.now().setZone( z );
+		if ( ! now.isValid ) {
+			return;
+		}
+		const minute = now.minute;
+		const roundUp = minute % 15 === 0 ? 0 : 15 - ( minute % 15 );
+		const startLocal = now.plus( { minutes: roundUp } ).startOf( 'minute' );
+		const endLocal = startLocal.plus( { minutes: 30 } );
+		setStartUtc( startLocal.toUTC().toFormat( 'yyyy-MM-dd HH:mm:ss' ) );
+		setEndUtc( endLocal.toUTC().toFormat( 'yyyy-MM-dd HH:mm:ss' ) );
+	}, [ locationId, getTimezoneForLocation, siteTimezone ] );
 
 	useEffect( () => {
 		if ( ! open ) {
@@ -583,7 +655,13 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 		}
 		dietTouchedRef.current = false;
 		setTab( 'care_instructions' );
-		setBookingKind( 'boarding' );
+		if ( isWalkInMode ) {
+			setBookingKind( walkInKind );
+			setStatus( 'checked_in' );
+		} else {
+			setBookingKind( resolvedDefaultKind );
+			setStatus( 'pending' );
+		}
 		setResourceId( 0 );
 		setClinicExamRoomId( 0 );
 		setClinicClinicianId( 0 );
@@ -598,6 +676,17 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 		setRosterOverrideOk( false );
 		rosterAutoLocationSigRef.current = '';
 		lastWeekFacilityKeyRef.current = '';
+		walkInTimesKeyRef.current = '';
+	}, [ open, resolvedDefaultKind, isWalkInMode, walkInKind ] );
+
+	useEffect( () => {
+		if ( ! open || typeof document === 'undefined' ) {
+			return;
+		}
+		document.body.classList.add( 'kf-cal-modal-open' );
+		return () => {
+			document.body.classList.remove( 'kf-cal-modal-open' );
+		};
 	}, [ open ] );
 
 	useEffect( () => {
@@ -639,6 +728,29 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 		facilityPayload,
 		resetDefaultsForWeek,
 		locationId,
+		isWalkInMode,
+	] );
+
+	useEffect( () => {
+		if ( ! modalEnabled || ! isWalkInMode ) {
+			return;
+		}
+		if ( locationId < 1 ) {
+			return;
+		}
+		const facReady = undefined === facilityPayload ? '0' : '1';
+		const key = `${ locationId }|${ facReady }`;
+		if ( walkInTimesKeyRef.current === key ) {
+			return;
+		}
+		walkInTimesKeyRef.current = key;
+		resetWalkInTimes();
+	}, [
+		modalEnabled,
+		isWalkInMode,
+		locationId,
+		facilityPayload,
+		resetWalkInTimes,
 	] );
 
 	useEffect( () => {
@@ -843,8 +955,83 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 		saveMutation.mutate( data );
 	};
 
-	if ( ! open || ! kennelpressBookings ) {
+	if ( ! open ) {
 		return null;
+	}
+
+	logCalendarTrace( 'BookingModal render', {
+		open,
+		kennelpress_bookings_url: kennelpressBookings,
+		boarding_rest_base: boardingRestBase,
+		diagnostics: settings.add_booking_diagnostics || null,
+	} );
+
+	const bootstrapLoading =
+		!! kennelpressBookings &&
+		bootstrapQuery.isPending &&
+		undefined === bootstrapQuery.data;
+
+	const portalTarget =
+		typeof document !== 'undefined' ? document.body : null;
+
+	if ( ! kennelpressBookings ) {
+		const unavailableModal = (
+			<div
+				className="kf-booking-modal-backdrop"
+				role="presentation"
+				onClick={ onClose }
+			>
+				<div
+					className="kf-booking-modal"
+					role="dialog"
+					aria-modal="true"
+					aria-labelledby="kf-booking-modal-title"
+					onClick={ ( e ) => e.stopPropagation() }
+				>
+					<div className="kf-booking-modal__header">
+						<h2 id="kf-booking-modal-title">
+							{ modalTitle }
+						</h2>
+						<button
+							type="button"
+							className="button-link kf-booking-modal__close"
+							onClick={ onClose }
+						>
+							{ __( 'Close', 'kennelflow-core' ) }
+						</button>
+					</div>
+					<p className="kf-booking-modal__hint">
+						{ __(
+							'Booking intake requires KennelFlow Boarding (not Core alone). Install and activate kennelflow-boarding, then reload this page.',
+							'kennelflow-core'
+						) }
+					</p>
+					{ settings.add_booking_diagnostics &&
+					Array.isArray( settings.add_booking_diagnostics.issues ) &&
+					settings.add_booking_diagnostics.issues.length > 0 ? (
+						<ul className="kf-booking-modal__hint-list">
+							{ settings.add_booking_diagnostics.issues.map( ( issue, index ) => (
+								<li key={ index }>{ issue }</li>
+							) ) }
+						</ul>
+					) : null }
+					{ isCalendarDebugEnabled() &&
+					settings.add_booking_diagnostics ? (
+						<details className="kf-cal-diagnostics__debug">
+							<summary>
+								{ __( 'Technical details (debug)', 'kennelflow-core' ) }
+							</summary>
+							<pre>
+								{ JSON.stringify( settings.add_booking_diagnostics, null, 2 ) }
+							</pre>
+						</details>
+					) : null }
+				</div>
+			</div>
+		);
+		return portalTarget
+			? renderInBodyPortal( unavailableModal, portalTarget )
+			: unavailableModal;
 	}
 
 	const allergies = careData && careData.kf_allergies ? String( careData.kf_allergies ).trim() : '';
@@ -855,7 +1042,7 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 
 	const submitting = saveMutation.isPending;
 
-	return (
+	const bookingModal = (
 		<div
 			className="kf-booking-modal-backdrop"
 			role="presentation"
@@ -870,7 +1057,7 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 			>
 				<div className="kf-booking-modal__header">
 					<h2 id="kf-booking-modal-title">
-						{ __( 'Add booking', 'kennelflow-core' ) }
+						{ modalTitle }
 					</h2>
 					<button
 						type="button"
@@ -881,6 +1068,12 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 					</button>
 				</div>
 
+				{ bootstrapLoading ? (
+					<p className="kf-booking-modal__loading">
+						{ __( 'Loading booking form…', 'kennelflow-core' ) }
+					</p>
+				) : (
+					<>
 				<div className="kf-booking-modal__tabs" role="tablist">
 					<button
 						type="button"
@@ -1106,9 +1299,7 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 								<option value="0">{ __( '— Select —', 'kennelflow-core' ) }</option>
 								{ pets.map( ( p ) => (
 									<option key={ p.id } value={ String( p.id ) }>
-										{ p.title && p.title.rendered
-											? p.title.rendered
-											: `#${ p.id }` }
+										{ formatPetSelectLabel( p ) }
 									</option>
 								) ) }
 							</select>
@@ -1320,14 +1511,20 @@ export function BookingModal( { open, onClose, onSaved, weekRange } ) {
 						type="button"
 						className="button button-primary"
 						onClick={ handleSubmit }
-						disabled={ submitting }
+						disabled={ submitting || bootstrapLoading }
 					>
 						{ submitting
 							? __( 'Saving…', 'kennelflow-core' )
 							: __( 'Save booking', 'kennelflow-core' ) }
 					</button>
 				</div>
+					</>
+				) }
 			</div>
 		</div>
 	);
+
+	return portalTarget
+		? renderInBodyPortal( bookingModal, portalTarget )
+		: bookingModal;
 }

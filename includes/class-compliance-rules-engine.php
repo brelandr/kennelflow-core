@@ -20,7 +20,7 @@ class ComplianceRulesEngine {
 	 * @param int $pet_id kf_pet post ID.
 	 * @return array<string, mixed>|WP_Error
 	 */
-	public static function get_pet_status( $pet_id ) {
+	public static function get_pet_status( $pet_id, $required_labels = null ) {
 		$pet_id = absint( $pet_id );
 		if ( $pet_id < 1 ) {
 			return new \WP_Error(
@@ -38,7 +38,11 @@ class ComplianceRulesEngine {
 			);
 		}
 
-		$required = get_option( 'ltkf_required_vaccines', array() );
+		if ( null === $required_labels ) {
+			$required = get_option( 'ltkf_required_vaccines', array() );
+		} else {
+			$required = is_array( $required_labels ) ? $required_labels : array();
+		}
 		if ( ! is_array( $required ) ) {
 			$required = array();
 		}

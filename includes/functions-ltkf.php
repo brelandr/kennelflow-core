@@ -114,6 +114,65 @@ function ltkf_get_pet_owner_user_id( $post_id ) {
 }
 
 /**
+ * Pet owner display name for admin dropdowns and calendar UI.
+ *
+ * @param int $pet_id Pet post ID.
+ * @return string Empty when no owner is assigned.
+ */
+function ltkf_get_pet_owner_display_name( $pet_id ) {
+	$owner_id = ltkf_get_pet_owner_user_id( $pet_id );
+	if ( $owner_id < 1 ) {
+		return '';
+	}
+
+	$user = get_userdata( $owner_id );
+	if ( ! $user instanceof \WP_User ) {
+		return '';
+	}
+
+	$name = trim( (string) $user->display_name );
+	if ( '' !== $name ) {
+		return $name;
+	}
+
+	return trim( (string) $user->user_login );
+}
+
+/**
+ * Pet option label for staff selects: "Pet name · Owner name".
+ *
+ * @param int    $pet_id    Pet post ID.
+ * @param string $pet_title Optional title (avoids extra lookup when already loaded).
+ * @return string
+ */
+function ltkf_get_pet_select_label( $pet_id, $pet_title = '' ) {
+	$pet_id = absint( $pet_id );
+	if ( $pet_id < 1 ) {
+		return '';
+	}
+
+	$title = trim( (string) $pet_title );
+	if ( '' === $title ) {
+		$title = trim( (string) get_the_title( $pet_id ) );
+	}
+	if ( '' === $title ) {
+		$title = '#' . $pet_id;
+	}
+
+	$owner = ltkf_get_pet_owner_display_name( $pet_id );
+	if ( '' === $owner ) {
+		return $title;
+	}
+
+	return sprintf(
+		/* translators: 1: pet name, 2: owner display name */
+		__( '%1$s · %2$s', 'kennelflow-core' ),
+		$title,
+		$owner
+	);
+}
+
+/**
  * Best-effort phone for SMS (WooCommerce billing, common user meta, Hub owner field).
  *
  * @param int $user_id WordPress user ID.
@@ -322,8 +381,8 @@ function ltkf_get_hub_location_timezone_string( $location_post_id ) {
 	}
 
 	$tz = null;
-	if ( class_exists( 'KennelFlow_Boarding_Facility_Settings' ) ) {
-		$cfg = KennelFlow_Boarding_Facility_Settings::get_for_location( $location_post_id );
+	if ( class_exists( '\KennelFlow_Boarding_Facility_Settings' ) ) {
+		$cfg = \KennelFlow_Boarding_Facility_Settings::get_for_location( $location_post_id );
 		if ( is_array( $cfg ) && ! empty( $cfg['timezone'] ) && is_string( $cfg['timezone'] ) ) {
 			$tz = $cfg['timezone'];
 		}
@@ -767,12 +826,12 @@ function ltkf_medical_records_where_not_archived_for_prepare() {
 	}
 
 	$archived = 'archived';
-	if ( class_exists( 'ComplianceRetention' ) ) {
+	if ( class_exists( ComplianceRetention::class ) ) {
 		$archived = ComplianceRetention::RECORD_STATUS_ARCHIVED;
 	}
 
 	$pending = 'pending_review';
-	if ( class_exists( 'ComplianceRetention' ) ) {
+	if ( class_exists( ComplianceRetention::class ) ) {
 		$pending = ComplianceRetention::RECORD_STATUS_PENDING_REVIEW;
 	}
 
@@ -816,6 +875,54 @@ function ltkf_get_portal_dashboard_url() {
 
 	$fallback = home_url( '/' );
 	wp_cache_set( 'ltkf_portal_dashboard_url_resolved', $fallback, LTKF_OBJECT_CACHE_GROUP_PORTAL, 12 * HOUR_IN_SECONDS );
+
+	return esc_url_raw( $fallback );
+}
+
+/**
+ * Public URL for the booking wizard page ([kennelflow_vet_booking], [ltkf_booking], or legacy tags).
+ *
+ * @return string Escaped absolute URL (fallback: home_url).
+ */
+function ltkf_get_public_booking_page_url() {
+	$filtered = apply_filters( 'ltkf_public_booking_page_url', '' );
+	if ( is_string( $filtered ) && '' !== $filtered ) {
+		return esc_url_raw( $filtered );
+	}
+
+	$cached = wp_cache_get( 'ltkf_public_booking_page_url_resolved', LTKF_OBJECT_CACHE_GROUP_PORTAL );
+	if ( is_string( $cached ) && '' !== $cached ) {
+		return esc_url_raw( $cached );
+	}
+
+	global $wpdb;
+
+	$patterns = array(
+		'%' . $wpdb->esc_like( '[kennelflow_vet_booking]' ) . '%',
+		'%' . $wpdb->esc_like( '[kfvet_booking]' ) . '%',
+		'%' . $wpdb->esc_like( '[ltkf_booking]' ) . '%',
+	);
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Single lookup; table names from $wpdb.
+	$post_id = (int) $wpdb->get_var(
+		$wpdb->prepare(
+			"SELECT ID FROM {$wpdb->posts} WHERE post_status = 'publish' AND ( post_content LIKE %s OR post_content LIKE %s OR post_content LIKE %s ) ORDER BY ID ASC LIMIT 1",
+			$patterns[0],
+			$patterns[1],
+			$patterns[2]
+		)
+	);
+
+	if ( $post_id > 0 ) {
+		$permalink = get_permalink( $post_id );
+		if ( is_string( $permalink ) && '' !== $permalink ) {
+			wp_cache_set( 'ltkf_public_booking_page_url_resolved', $permalink, LTKF_OBJECT_CACHE_GROUP_PORTAL, 12 * HOUR_IN_SECONDS );
+			return esc_url_raw( $permalink );
+		}
+	}
+
+	$fallback = home_url( '/' );
+	wp_cache_set( 'ltkf_public_booking_page_url_resolved', $fallback, LTKF_OBJECT_CACHE_GROUP_PORTAL, 12 * HOUR_IN_SECONDS );
 
 	return esc_url_raw( $fallback );
 }
@@ -867,8 +974,8 @@ function ltkf_get_effective_boarding_required_vaccines() {
  *     @type array<string, array<string, mixed>> $vaccines Label => status, expiration_gmt, record_id
  * }
  */
-function ltkf_get_pet_compliance_status( $pet_id ) {
-	if ( ! class_exists( 'ComplianceRulesEngine' ) ) {
+function ltkf_get_pet_compliance_status( $pet_id, $required_labels = null ) {
+	if ( ! class_exists( ComplianceRulesEngine::class ) ) {
 		return new \WP_Error(
 			'ltkf_compliance_engine_missing',
 			__( 'Compliance rules engine is not available.', 'kennelflow-core' ),
@@ -876,7 +983,7 @@ function ltkf_get_pet_compliance_status( $pet_id ) {
 		);
 	}
 
-	return ComplianceRulesEngine::get_pet_status( $pet_id );
+	return ComplianceRulesEngine::get_pet_status( $pet_id, $required_labels );
 }
 
 /**
@@ -891,7 +998,7 @@ function ltkf_get_pet_pending_compliance_vaccine_norms( $pet_id ) {
 	if ( $pet_id < 1
 		|| ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table )
 		|| ! ltkf_table_exists( $table )
-		|| ! class_exists( 'ComplianceRulesEngine' ) ) {
+		|| ! class_exists( ComplianceRulesEngine::class ) ) {
 		return array();
 	}
 
@@ -901,7 +1008,7 @@ function ltkf_get_pet_pending_compliance_vaccine_norms( $pet_id ) {
 
 	if ( ltkf_db_column_exists( $table, 'status' ) ) {
 		$pending = 'pending_review';
-		if ( class_exists( 'ComplianceRetention' ) ) {
+		if ( class_exists( ComplianceRetention::class ) ) {
 			$pending = ComplianceRetention::RECORD_STATUS_PENDING_REVIEW;
 		}
 
@@ -949,7 +1056,7 @@ function ltkf_get_pet_pending_compliance_vaccine_norms( $pet_id ) {
  * @param int $pet_id kf_pet post ID.
  * @return bool
  */
-function ltkf_pet_has_pending_compliance_upload_for_required_vaccines( $pet_id ) {
+function ltkf_pet_has_pending_compliance_upload_for_labels( $pet_id, array $required_labels ) {
 	$pet_id = absint( $pet_id );
 	if ( $pet_id < 1 ) {
 		return false;
@@ -960,10 +1067,67 @@ function ltkf_pet_has_pending_compliance_upload_for_required_vaccines( $pet_id )
 		return false;
 	}
 
-	$required = ltkf_get_required_vaccines();
-	foreach ( $required as $label ) {
+	foreach ( $required_labels as $label ) {
 		$norm = ComplianceRulesEngine::normalize_analyte( (string) $label );
 		if ( '' !== $norm && isset( $pending[ $norm ] ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Whether the pet has a pending staff review on any required vaccine (blocks booking until cleared).
+ *
+ * @param int $pet_id kf_pet post ID.
+ * @return bool
+ */
+function ltkf_pet_has_pending_compliance_upload_for_required_vaccines( $pet_id ) {
+	return ltkf_pet_has_pending_compliance_upload_for_labels( $pet_id, ltkf_get_required_vaccines() );
+}
+
+/**
+ * Whether a pet fails vaccine compliance for a given required-vaccine label list.
+ *
+ * @param int      $pet_id          kf_pet post ID.
+ * @param string[] $required_labels Vaccine display names.
+ * @return bool
+ */
+function ltkf_pet_requires_vaccine_compliance_for_labels( $pet_id, array $required_labels ) {
+	$pet_id = absint( $pet_id );
+	if ( $pet_id < 1 ) {
+		return false;
+	}
+
+	$labels = array();
+	foreach ( $required_labels as $label ) {
+		$label = sanitize_text_field( (string) $label );
+		if ( '' !== $label ) {
+			$labels[] = $label;
+		}
+	}
+
+	if ( empty( $labels ) ) {
+		return false;
+	}
+
+	if ( ltkf_pet_has_pending_compliance_upload_for_labels( $pet_id, $labels ) ) {
+		return true;
+	}
+
+	$status = ltkf_get_pet_compliance_status( $pet_id, $labels );
+	if ( is_wp_error( $status ) ) {
+		return true;
+	}
+
+	$vaccines = isset( $status['vaccines'] ) && is_array( $status['vaccines'] ) ? $status['vaccines'] : array();
+	foreach ( $vaccines as $row ) {
+		if ( ! is_array( $row ) ) {
+			continue;
+		}
+		$st = isset( $row['status'] ) ? (string) $row['status'] : '';
+		if ( 'Valid' !== $st ) {
 			return true;
 		}
 	}
@@ -980,7 +1144,7 @@ function ltkf_pet_has_pending_compliance_upload_for_required_vaccines( $pet_id )
  */
 function ltkf_get_pet_compliance_vaccine_rows_for_labels( $pet_id, array $required_labels ) {
 	$pet_id = absint( $pet_id );
-	if ( $pet_id < 1 || ! class_exists( 'ComplianceRulesEngine' ) ) {
+	if ( $pet_id < 1 || ! class_exists( ComplianceRulesEngine::class ) ) {
 		return array();
 	}
 
@@ -998,7 +1162,7 @@ function ltkf_get_pet_compliance_vaccine_rows_for_labels( $pet_id, array $requir
 
 	$pending = ltkf_get_pet_pending_compliance_vaccine_norms( $pet_id );
 
-	$status = ltkf_get_pet_compliance_status( $pet_id );
+	$status = ltkf_get_pet_compliance_status( $pet_id, $required );
 	$vrows  = array();
 	if ( ! is_wp_error( $status ) && isset( $status['vaccines'] ) && is_array( $status['vaccines'] ) ) {
 		$vrows = $status['vaccines'];
@@ -1077,32 +1241,182 @@ function ltkf_get_boarding_wizard_pet_compliance_vaccines( $pet_id ) {
  * @return bool
  */
 function ltkf_pet_requires_compliance_action( $pet_id ) {
+	return ltkf_pet_requires_vaccine_compliance_for_labels( $pet_id, ltkf_get_required_vaccines() );
+}
+
+/**
+ * Whether a pet must complete boarding compliance (signed waiver + boarding required vaccines).
+ *
+ * @param int $pet_id kf_pet post ID.
+ * @return bool
+ */
+function ltkf_pet_requires_boarding_compliance_action( $pet_id ) {
 	$pet_id = absint( $pet_id );
 	if ( $pet_id < 1 ) {
 		return false;
 	}
 
-	if ( ltkf_pet_has_pending_compliance_upload_for_required_vaccines( $pet_id ) ) {
+	if ( class_exists( Waiver::class ) && ! Waiver::pet_has_valid_waiver( $pet_id ) ) {
 		return true;
 	}
 
-	$status = ltkf_get_pet_compliance_status( $pet_id );
-	if ( is_wp_error( $status ) ) {
-		return true;
+	return ltkf_pet_requires_vaccine_compliance_for_labels( $pet_id, ltkf_get_effective_boarding_required_vaccines() );
+}
+
+/**
+ * Owner-facing messages describing what a pet owner must do before booking or paying.
+ *
+ * @param int $pet_id kf_pet post ID.
+ * @return string[] Short action strings (empty when no action is required).
+ */
+function ltkf_get_pet_owner_compliance_action_messages( $pet_id ) {
+	$pet_id = absint( $pet_id );
+	if ( $pet_id < 1 || ! ltkf_pet_requires_boarding_compliance_action( $pet_id ) ) {
+		return array();
 	}
 
-	$vaccines = isset( $status['vaccines'] ) && is_array( $status['vaccines'] ) ? $status['vaccines'] : array();
-	foreach ( $vaccines as $row ) {
-		if ( ! is_array( $row ) ) {
-			continue;
-		}
-		$st = isset( $row['status'] ) ? (string) $row['status'] : '';
-		if ( 'Valid' !== $st ) {
-			return true;
+	$messages = array();
+
+	if ( class_exists( ComplianceRulesEngine::class ) ) {
+		$vaccines = ltkf_get_boarding_wizard_pet_compliance_vaccines( $pet_id );
+		foreach ( $vaccines as $vrow ) {
+			if ( ! is_array( $vrow ) || empty( $vrow['state'] ) || empty( $vrow['label'] ) ) {
+				continue;
+			}
+			$label = (string) $vrow['label'];
+			if ( 'missing' === $vrow['state'] ) {
+				$messages[] = sprintf(
+					/* translators: %s: vaccine name */
+					__( 'Upload %s vaccination record', 'kennelflow-core' ),
+					$label
+				);
+			} elseif ( 'expired' === $vrow['state'] ) {
+				$messages[] = sprintf(
+					/* translators: %s: vaccine name */
+					__( 'Renew expired %s vaccination', 'kennelflow-core' ),
+					$label
+				);
+			} elseif ( 'pending_review' === $vrow['state'] ) {
+				$messages[] = sprintf(
+					/* translators: %s: vaccine name */
+					__( 'Wait for staff to review %s document', 'kennelflow-core' ),
+					$label
+				);
+			}
 		}
 	}
 
-	return false;
+	if ( class_exists( Waiver::class ) && ! Waiver::pet_has_valid_waiver( $pet_id ) ) {
+		$messages[] = __( 'Sign boarding waiver in the Legal Waivers tab', 'kennelflow-core' );
+	}
+
+	if ( empty( $messages ) ) {
+		$messages[] = __( 'Update vaccination records or contact the facility for help', 'kennelflow-core' );
+	}
+
+	/**
+	 * Filters owner portal action-required messages for a pet.
+	 *
+	 * @since 0.2.6
+	 *
+	 * @param string[] $messages Action strings.
+	 * @param int      $pet_id   Pet post ID.
+	 */
+	return apply_filters( 'ltkf_pet_owner_compliance_action_messages', $messages, $pet_id );
+}
+
+/**
+ * Whether pet owners may submit boarding bookings through the public booking wizard.
+ *
+ * @return bool
+ */
+function ltkf_is_owner_online_boarding_enabled() {
+	return '1' === get_option( 'ltkf_allow_owner_online_boarding', '1' );
+}
+
+/**
+ * Whether a pet owner may request an online boarding stay for a pet (setting + compliance + filter).
+ *
+ * Kennel availability is validated separately when the booking is created.
+ *
+ * @param int $pet_id  kf_pet post ID.
+ * @param int $user_id WordPress user ID (defaults to current user).
+ * @return bool
+ */
+function ltkf_owner_may_request_online_boarding( $pet_id, $user_id = 0 ) {
+	$pet_id  = absint( $pet_id );
+	$user_id = $user_id > 0 ? absint( $user_id ) : get_current_user_id();
+	if ( $pet_id < 1 || $user_id < 1 ) {
+		return false;
+	}
+	if ( ! ltkf_is_owner_online_boarding_enabled() ) {
+		return false;
+	}
+	if ( function_exists( 'ltkf_get_pet_owner_user_id' ) ) {
+		$owner_id = (int) ltkf_get_pet_owner_user_id( $pet_id );
+		if ( $owner_id < 1 || $owner_id !== $user_id ) {
+			return false;
+		}
+	}
+	if ( ltkf_pet_requires_boarding_compliance_action( $pet_id ) ) {
+		return false;
+	}
+
+	/**
+	 * Final gate for owner online boarding eligibility (pet + owner criteria met).
+	 *
+	 * @since 0.2.7
+	 *
+	 * @param bool $allowed  Default true when setting is on and boarding compliance is satisfied.
+	 * @param int  $pet_id   Pet post ID.
+	 * @param int  $user_id  Owner user ID.
+	 */
+	return (bool) apply_filters( 'ltkf_allow_owner_boarding_booking', true, $pet_id, $user_id );
+}
+
+/**
+ * REST guard for owner-initiated boarding bookings (returns WP_Error or null).
+ *
+ * @param int $pet_id  kf_pet post ID.
+ * @param int $user_id WordPress user ID (defaults to current user).
+ * @return \WP_Error|null
+ */
+function ltkf_rest_guard_owner_online_boarding( $pet_id, $user_id = 0 ) {
+	$pet_id  = absint( $pet_id );
+	$user_id = $user_id > 0 ? absint( $user_id ) : get_current_user_id();
+
+	if ( ! ltkf_is_owner_online_boarding_enabled() ) {
+		return new \WP_Error(
+			'ltkf_online_boarding_disabled',
+			__( 'Online boarding booking is not available on this site. Please contact the facility.', 'kennelflow-core' ),
+			array( 'status' => 403 )
+		);
+	}
+
+	if ( ltkf_pet_requires_boarding_compliance_action( $pet_id ) ) {
+		$msgs = ltkf_get_pet_owner_compliance_action_messages( $pet_id );
+		$msg  = ! empty( $msgs )
+			? implode( ' ', array_map( 'strval', $msgs ) )
+			: __( 'Complete boarding requirements before booking online.', 'kennelflow-core' );
+		return new \WP_Error(
+			'ltkf_boarding_not_eligible',
+			$msg,
+			array(
+				'status'          => 403,
+				'action_messages' => $msgs,
+			)
+		);
+	}
+
+	if ( ! ltkf_owner_may_request_online_boarding( $pet_id, $user_id ) ) {
+		return new \WP_Error(
+			'ltkf_boarding_not_eligible',
+			__( 'This pet is not eligible for online boarding booking.', 'kennelflow-core' ),
+			array( 'status' => 403 )
+		);
+	}
+
+	return null;
 }
 
 /**
@@ -1139,6 +1453,210 @@ function ltkf_compliance_gatekeeper_e2e_allow_noncompliant_checkout() {
 }
 
 /**
+ * Whether the compiled Hub calendar bundle exists on disk.
+ *
+ * @return bool
+ */
+function ltkf_hub_calendar_bundle_readable() {
+	return is_readable( LTKF_PLUGIN_DIR . 'build/index.js' )
+		&& is_readable( LTKF_PLUGIN_DIR . 'build/index.asset.php' );
+}
+
+/**
+ * Enqueue compiled Hub calendar React bundle (`build/index.js` / `build/index.css`).
+ *
+ * @param string $script_handle Unique script handle (e.g. `kf-hub-admin-calendar`).
+ * @return bool True when the bundle was enqueued.
+ */
+function ltkf_enqueue_hub_calendar_bundle( $script_handle ) {
+	$script_handle = sanitize_key( (string) $script_handle );
+	if ( '' === $script_handle || ! ltkf_hub_calendar_bundle_readable() ) {
+		return false;
+	}
+
+	// Ensure WordPress package scripts (React, api-fetch) are registered on front-end and admin.
+	wp_enqueue_script( 'wp-element' );
+	wp_enqueue_script( 'wp-api-fetch' );
+	wp_enqueue_script( 'wp-i18n' );
+
+	$asset = array(
+		'dependencies' => array( 'wp-element', 'wp-api-fetch', 'wp-i18n' ),
+		'version'      => LTKF_CORE_VERSION,
+	);
+	$loaded = require LTKF_PLUGIN_DIR . 'build/index.asset.php';
+	if ( is_array( $loaded ) ) {
+		$asset = array_merge( $asset, $loaded );
+	}
+
+	$deps = array_values(
+		array_unique(
+			array_merge(
+				array( 'wp-element', 'wp-api-fetch', 'wp-i18n' ),
+				array_map( 'strval', (array) $asset['dependencies'] )
+			)
+		)
+	);
+
+	wp_enqueue_script(
+		$script_handle,
+		LTKF_PLUGIN_URL . 'build/index.js',
+		$deps,
+		$asset['version'],
+		true
+	);
+
+	wp_localize_script(
+		$script_handle,
+		'kfCalendarSettings',
+		ltkf_get_calendar_localized_settings()
+	);
+
+	wp_set_script_translations( $script_handle, 'kennelflow-core', LTKF_PLUGIN_DIR . 'languages' );
+
+	wp_enqueue_style(
+		$script_handle,
+		LTKF_PLUGIN_URL . 'build/index.css',
+		array(),
+		$asset['version']
+	);
+
+	wp_add_inline_script(
+		$script_handle,
+		'document.addEventListener("DOMContentLoaded",function(){if(window.kfMountHubCalendars){window.kfMountHubCalendars();}});',
+		'after'
+	);
+
+	return true;
+}
+
+/**
+ * Markup for a Hub calendar mount node (React replaces the loading shell on boot).
+ *
+ * @param array<string, string> $args id, class, start_date, end_date, booking_kind, corner_label.
+ * @return string
+ */
+function ltkf_get_hub_calendar_shell_markup( $args = array() ) {
+	$args = wp_parse_args(
+		$args,
+		array(
+			'id'           => 'kf-admin-calendar-root',
+			'class'        => 'kf-admin-calendar-root',
+			'start_date'   => '',
+			'end_date'     => '',
+			'booking_kind' => '',
+			'corner_label' => '',
+		)
+	);
+
+	$id           = sanitize_html_class( (string) $args['id'] );
+	$class_tokens = array_filter( array_map( 'trim', explode( ' ', (string) $args['class'] ) ) );
+	$class        = implode(
+		' ',
+		array_map( 'sanitize_html_class', $class_tokens )
+	);
+	$start_date   = sanitize_text_field( (string) $args['start_date'] );
+	$end_date     = sanitize_text_field( (string) $args['end_date'] );
+	$booking_kind = sanitize_key( (string) $args['booking_kind'] );
+	$corner_label = sanitize_text_field( (string) $args['corner_label'] );
+
+	$extra_attrs = '';
+	if ( '' !== $booking_kind ) {
+		$extra_attrs .= sprintf( ' data-booking-kind="%s"', esc_attr( $booking_kind ) );
+	}
+	if ( '' !== $corner_label ) {
+		$extra_attrs .= sprintf( ' data-corner-label="%s"', esc_attr( $corner_label ) );
+	}
+
+	return sprintf(
+		'<div id="%1$s" class="%2$s" data-start-date="%3$s" data-end-date="%4$s"%5$s aria-live="polite"><p class="kf-cal-shell-loading">%6$s</p></div>',
+		esc_attr( $id ),
+		esc_attr( $class ),
+		esc_attr( $start_date ),
+		esc_attr( $end_date ),
+		$extra_attrs,
+		esc_html__( 'Loading calendar…', 'kennelflow-core' )
+	);
+}
+
+/**
+ * Whether verbose calendar diagnostics / console logging is enabled.
+ *
+ * @return bool
+ */
+function ltkf_calendar_debug_enabled() {
+	/**
+	 * Enable Hub calendar debug output in the browser console and UI.
+	 *
+	 * @since 0.3.7
+	 *
+	 * @param bool $enabled Default: WP_DEBUG.
+	 */
+	return (bool) apply_filters(
+		'ltkf_calendar_debug',
+		defined( 'WP_DEBUG' ) && WP_DEBUG
+	);
+}
+
+/**
+ * Why Add booking may be unavailable (for admin UI + browser diagnostics).
+ *
+ * @param array<string, mixed> $localized Calendar script settings after spoke filters.
+ * @return array<string, mixed>
+ */
+function ltkf_get_calendar_add_booking_diagnostics( $localized = array() ) {
+	if ( ! is_array( $localized ) ) {
+		$localized = array();
+	}
+
+	$issues = array();
+	$ready  = true;
+
+	if ( ! ltkf_hub_calendar_bundle_readable() ) {
+		$issues[] = __( 'Calendar JavaScript bundle is missing from KennelFlow Core (run npm run build and deploy the build/ folder).', 'kennelflow-core' );
+		$ready    = false;
+	}
+
+	if ( ! defined( 'KENNELFLOW_BOARDING_VERSION' ) ) {
+		$issues[] = __( 'KennelFlow Boarding is not active. Install and activate the kennelflow-boarding plugin — Add booking requires Boarding for kennels, intake, and REST create.', 'kennelflow-core' );
+		$ready    = false;
+	}
+
+	if ( ! class_exists( '\KennelFlow_Boarding_REST_Bookings_Controller' ) ) {
+		$issues[] = __( 'KennelFlow Boarding bookings REST is not loaded. Update KennelFlow Boarding to the latest version.', 'kennelflow-core' );
+		$ready    = false;
+	}
+
+	if ( empty( $localized['kennelpress_bookings_url'] ) ) {
+		$issues[] = __( 'Boarding calendar bridge did not register kennelpress_bookings_url. Update KennelFlow Boarding (includes class-kennelflow-boarding-calendar-bridge.php).', 'kennelflow-core' );
+		$ready    = false;
+	}
+
+	$table = function_exists( 'ltkf_bookings_table_name' ) ? ltkf_bookings_table_name() : '';
+	if ( ! is_string( $table ) || '' === $table || ! ltkf_table_exists( $table ) ) {
+		$issues[] = __( 'Bookings database table is missing. Activate KennelFlow Core and Boarding so migrations can create wp_kf_bookings.', 'kennelflow-core' );
+		$ready    = false;
+	}
+
+	if ( ! current_user_can( 'edit_posts' ) && ! current_user_can( 'manage_options' ) ) {
+		$issues[] = __( 'Your user account lacks edit_posts (staff calendar access).', 'kennelflow-core' );
+		$ready    = false;
+	}
+
+	return array(
+		'ready'             => $ready,
+		'issues'            => $issues,
+		'boarding_active'   => defined( 'KENNELFLOW_BOARDING_VERSION' ),
+		'boarding_version'  => defined( 'KENNELFLOW_BOARDING_VERSION' ) ? (string) KENNELFLOW_BOARDING_VERSION : '',
+		'core_version'      => defined( 'LTKF_CORE_VERSION' ) ? (string) LTKF_CORE_VERSION : '',
+		'has_bookings_url'  => ! empty( $localized['kennelpress_bookings_url'] ),
+		'bookings_rest_base'=> isset( $localized['kennelflow_boarding_rest_base'] )
+			? (string) $localized['kennelflow_boarding_rest_base']
+			: '',
+		'debug'             => ltkf_calendar_debug_enabled(),
+	);
+}
+
+/**
  * Localized settings for Hub calendar React (`kfCalendarSettings`) — admin screen and `[kf_hub_calendar]` shortcode.
  *
  * @return array<string, mixed>
@@ -1149,12 +1667,31 @@ function ltkf_get_calendar_localized_settings() {
 		$tz = 'UTC';
 	}
 
+	$debug_enabled = ltkf_calendar_debug_enabled();
+	$show_debug    = $debug_enabled;
+	if ( ! $show_debug && is_admin() && current_user_can( 'manage_options' ) ) {
+		$show_debug = true;
+	}
+
+	/**
+	 * Show the in-page KennelFlow calendar debug panel (admins / WP_DEBUG).
+	 *
+	 * @since 0.3.8
+	 *
+	 * @param bool $show_debug Default: site admins in wp-admin or when calendar debug is on.
+	 */
+	$show_debug = (bool) apply_filters( 'ltkf_calendar_show_debug_panel', $show_debug );
+
 	$localized = array(
 		'rest_url'             => esc_url_raw( rest_url() ),
 		'nonce'                => wp_create_nonce( 'wp_rest' ),
 		'admin_url'            => admin_url(),
 		'bookings_create_path' => '/kennelflow/v1/bookings',
 		'site_timezone'        => $tz,
+		'debug'                => $debug_enabled,
+		'show_debug_panel'     => $show_debug,
+		'force_debug_log'      => $show_debug || $debug_enabled,
+		'script_version'       => defined( 'LTKF_CORE_VERSION' ) ? (string) LTKF_CORE_VERSION : '',
 	);
 
 	/**
@@ -1164,7 +1701,47 @@ function ltkf_get_calendar_localized_settings() {
 	 *
 	 * @param array<string, mixed> $localized Settings passed to `kfCalendarSettings`.
 	 */
-	return apply_filters( 'ltkf_admin_calendar_localized_settings', $localized );
+	$localized = apply_filters( 'ltkf_admin_calendar_localized_settings', $localized );
+
+	$localized['add_booking_diagnostics'] = ltkf_get_calendar_add_booking_diagnostics( $localized );
+
+	return $localized;
+}
+
+/**
+ * Whether the user may view the Hub calendar (admin screen, shortcode, REST reads).
+ *
+ * @param int $user_id WordPress user ID (0 = current user).
+ * @return bool
+ */
+function ltkf_user_can_view_hub_calendar( $user_id = 0 ) {
+	$user_id = absint( $user_id );
+	$cap     = apply_filters( 'ltkf_admin_calendar_capability', 'edit_posts' );
+
+	if ( $user_id > 0 ) {
+		$can = user_can( $user_id, $cap ) || user_can( $user_id, 'manage_options' );
+	} else {
+		$can = current_user_can( $cap ) || current_user_can( 'manage_options' );
+	}
+
+	// Spoke-specific caps (e.g. groompress_view_calendar) must not block staff who still have edit_posts.
+	if ( ! $can && 'edit_posts' !== $cap ) {
+		if ( $user_id > 0 ) {
+			$can = user_can( $user_id, 'edit_posts' );
+		} else {
+			$can = current_user_can( 'edit_posts' );
+		}
+	}
+
+	/**
+	 * Final gate for Hub calendar UI and read-only calendar REST routes.
+	 *
+	 * @since 0.3.2
+	 *
+	 * @param bool $can     Whether the user passed the base calendar capability.
+	 * @param int  $user_id User ID (0 = current user).
+	 */
+	return (bool) apply_filters( 'ltkf_user_can_view_hub_calendar', $can, $user_id );
 }
 
 /**
@@ -1226,3 +1803,264 @@ function ltkf_migration_ensure_pet_owner_role( $user_id ) {
 		$user->add_role( 'pet_owner' );
 	}
 }
+
+/**
+ * Admin or public URL for a post shown in calendar record-link popovers.
+ *
+ * Non-public CPT rows (bookings) must not use front-end permalinks.
+ *
+ * @param int $post_id Post ID.
+ * @return string Empty when the user cannot view the post.
+ */
+function ltkf_get_admin_post_record_link( $post_id ) {
+	$post_id = absint( $post_id );
+	if ( $post_id < 1 ) {
+		return '';
+	}
+
+	$post = get_post( $post_id );
+	if ( ! $post instanceof \WP_Post ) {
+		return '';
+	}
+
+	if ( current_user_can( 'edit_post', $post_id ) ) {
+		$edit = get_edit_post_link( $post_id, 'raw' );
+		if ( is_string( $edit ) && '' !== $edit ) {
+			return esc_url_raw( $edit );
+		}
+	}
+
+	if ( ! current_user_can( 'read_post', $post_id ) ) {
+		return '';
+	}
+
+	if ( ! is_post_publicly_viewable( $post ) ) {
+		return esc_url_raw( admin_url( 'post.php?post=' . $post_id . '&action=edit' ) );
+	}
+
+	$permalink = get_permalink( $post_id );
+	if ( is_string( $permalink ) && '' !== $permalink ) {
+		return esc_url_raw( $permalink );
+	}
+
+	return '';
+}
+
+/**
+ * Update booking status on the underlying appointment post and sync index rows.
+ *
+ * @param int    $post_id Booking post ID (`kennelpress_booking` or `kf_vet_booking`).
+ * @param string $status  Target status (sanitized per spoke).
+ * @return string|\WP_Error Sanitized status on success.
+ */
+function ltkf_update_booking_post_status( $post_id, $status ) {
+	$post_id = absint( $post_id );
+	if ( $post_id < 1 ) {
+		return new \WP_Error(
+			'ltkf_invalid_booking',
+			__( 'Invalid booking.', 'kennelflow-core' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	if ( ! current_user_can( 'edit_post', $post_id ) ) {
+		return new \WP_Error(
+			'ltkf_forbidden',
+			__( 'You cannot update this booking.', 'kennelflow-core' ),
+			array( 'status' => 403 )
+		);
+	}
+
+	$post = get_post( $post_id );
+	if ( ! $post instanceof \WP_Post ) {
+		return new \WP_Error(
+			'ltkf_not_found',
+			__( 'Booking not found.', 'kennelflow-core' ),
+			array( 'status' => 404 )
+		);
+	}
+
+	if ( 'kennelpress_booking' === $post->post_type && class_exists( '\KennelFlow_Boarding_Post_Meta' ) ) {
+		$status = \KennelFlow_Boarding_Post_Meta::sanitize_booking_status( (string) $status );
+		update_post_meta( $post_id, \KennelFlow_Boarding_Post_Meta::BOOKING_STATUS, $status );
+		if ( class_exists( '\KennelFlow_Boarding_Booking_Index' ) ) {
+			\KennelFlow_Boarding_Booking_Index::sync_from_post( $post_id, $post );
+		}
+		if ( class_exists( '\KennelFlow_Boarding_Cache' ) ) {
+			\KennelFlow_Boarding_Cache::bump_query_bust();
+		}
+		return $status;
+	}
+
+	if ( function_exists( 'kennelflow_vet_is_booking_post' ) && kennelflow_vet_is_booking_post( $post_id ) && class_exists( '\KennelFlow_Vet_Post_Meta' ) ) {
+		$status = \KennelFlow_Vet_Post_Meta::sanitize_booking_status( (string) $status );
+		update_post_meta( $post_id, \KennelFlow_Vet_Post_Meta::BOOKING_STATUS, $status );
+		if ( class_exists( '\KennelFlow_Vet_Bookings_Index' ) ) {
+			\KennelFlow_Vet_Bookings_Index::sync_from_post( $post_id );
+		}
+		if ( class_exists( '\KennelFlow_Vet_Cache' ) ) {
+			\KennelFlow_Vet_Cache::bump_query_bust();
+		}
+
+		global $wpdb;
+		$table = ltkf_bookings_table_name();
+		if ( is_string( $table ) && preg_match( '/^[a-zA-Z0-9_]+$/', $table ) && ltkf_table_exists( $table ) ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Hub calendar row when vet CPT is indexed in kf_bookings.
+			$wpdb->update(
+				$table,
+				array( 'status' => $status ),
+				array( 'post_id' => $post_id ),
+				array( '%s' ),
+				array( '%d' )
+			);
+		}
+
+		return $status;
+	}
+
+	return new \WP_Error(
+		'ltkf_unknown_booking_type',
+		__( 'Unsupported booking type.', 'kennelflow-core' ),
+		array( 'status' => 400 )
+	);
+}
+
+/**
+ * Whether a calendar booking row can be checked in (status transition to checked_in).
+ *
+ * @param array<string, mixed> $booking Normalized calendar booking.
+ * @return bool
+ */
+function ltkf_calendar_booking_can_check_in( $booking ) {
+	$booking = is_array( $booking ) ? $booking : array();
+
+	$post_id = isset( $booking['booking_post_id'] ) ? absint( $booking['booking_post_id'] ) : 0;
+	if ( $post_id < 1 || ! current_user_can( 'edit_post', $post_id ) ) {
+		return false;
+	}
+
+	$status = isset( $booking['status'] ) ? sanitize_key( (string) $booking['status'] ) : '';
+	$allowed_from = array( 'pending', 'pending_payment', 'confirmed' );
+
+	/**
+	 * Statuses that show the calendar “Check in” action.
+	 *
+	 * @since 0.3.16
+	 *
+	 * @param string[]             $allowed_from Current statuses.
+	 * @param array<string, mixed> $booking      Calendar booking row.
+	 */
+	$allowed_from = apply_filters( 'ltkf_calendar_check_in_from_statuses', $allowed_from, $booking );
+
+	return in_array( $status, $allowed_from, true );
+}
+
+/**
+ * Admin URLs for a calendar booking row (appointment, pet, owner, patient history).
+ *
+ * @param array<string, mixed> $booking Normalized calendar booking (pet_id, booking_post_id, booking_kind, owner_user_id).
+ * @return array<string, mixed>
+ */
+function ltkf_get_calendar_booking_record_links( $booking ) {
+	$booking = is_array( $booking ) ? $booking : array();
+
+	$pet_id          = isset( $booking['pet_id'] ) ? absint( $booking['pet_id'] ) : 0;
+	$booking_post_id = isset( $booking['booking_post_id'] ) ? absint( $booking['booking_post_id'] ) : 0;
+	$owner_user_id   = isset( $booking['owner_user_id'] ) ? absint( $booking['owner_user_id'] ) : 0;
+
+	if ( $owner_user_id < 1 && $pet_id > 0 ) {
+		$owner_user_id = absint( ltkf_get_pet_owner_user_id( $pet_id ) );
+	}
+
+	$links = array(
+		'booking'         => array(
+			'view' => '',
+			'edit' => '',
+		),
+		'pet'             => array(
+			'view' => '',
+			'edit' => '',
+		),
+		'owner'           => array(
+			'view' => '',
+			'edit' => '',
+		),
+		'patient_history' => '',
+	);
+
+	if ( $booking_post_id > 0 ) {
+		$booking_url = ltkf_get_admin_post_record_link( $booking_post_id );
+		if ( '' !== $booking_url ) {
+			if ( current_user_can( 'edit_post', $booking_post_id ) ) {
+				$links['booking']['edit'] = $booking_url;
+			}
+			$links['booking']['view'] = $booking_url;
+		}
+	}
+
+	if ( $pet_id > 0 ) {
+		$pet_url = ltkf_get_admin_post_record_link( $pet_id );
+		if ( '' !== $pet_url ) {
+			if ( current_user_can( 'edit_post', $pet_id ) ) {
+				$links['pet']['edit'] = $pet_url;
+			}
+			$links['pet']['view'] = $pet_url;
+		}
+
+		if ( class_exists( '\KennelFlow_Vet_Capabilities' )
+			&& class_exists( '\KennelFlow_Vet_Admin_EMR_Pages' )
+			&& current_user_can( \KennelFlow_Vet_Capabilities::CAP_READ_EMR ) ) {
+			$links['patient_history'] = esc_url_raw(
+				admin_url( 'admin.php?page=' . \KennelFlow_Vet_Admin_EMR_Pages::PAGE_HISTORY . '&pet_id=' . $pet_id )
+			);
+		}
+	}
+
+	if ( $owner_user_id > 0 && current_user_can( 'edit_user', $owner_user_id ) ) {
+		$user_edit = get_edit_user_link( $owner_user_id );
+		if ( is_string( $user_edit ) && '' !== $user_edit ) {
+			$links['owner']['edit'] = esc_url_raw( $user_edit );
+			$links['owner']['view']   = $links['owner']['edit'];
+		}
+	}
+
+	/**
+	 * Filters admin record links shown on Hub calendar booking popovers.
+	 *
+	 * @since 0.3.12
+	 *
+	 * @param array<string, mixed> $links   Link groups (booking, pet, owner, patient_history).
+	 * @param array<string, mixed> $booking Calendar booking row.
+	 */
+	return apply_filters( 'ltkf_calendar_booking_record_links', $links, $booking );
+}
+
+/**
+ * Attach record_links to calendar REST booking rows.
+ *
+ * @param array[]         $bookings Normalized bookings.
+ * @param object[]        $rows     Raw DB rows.
+ * @param \WP_REST_Request $request Request.
+ * @return array[]
+ */
+function ltkf_rest_calendar_enrich_bookings( $bookings, $rows, $request ) {
+	unset( $rows, $request );
+
+	if ( ! is_array( $bookings ) ) {
+		return array();
+	}
+
+	foreach ( $bookings as $index => $booking ) {
+		if ( ! is_array( $booking ) ) {
+			continue;
+		}
+		if ( empty( $booking['owner_user_id'] ) && ! empty( $booking['pet_id'] ) ) {
+			$bookings[ $index ]['owner_user_id'] = absint( ltkf_get_pet_owner_user_id( (int) $booking['pet_id'] ) );
+		}
+		$bookings[ $index ]['record_links'] = ltkf_get_calendar_booking_record_links( $bookings[ $index ] );
+	}
+
+	return $bookings;
+}
+
+add_filter( 'ltkf_rest_calendar_bookings', __NAMESPACE__ . '\\ltkf_rest_calendar_enrich_bookings', 20, 3 );

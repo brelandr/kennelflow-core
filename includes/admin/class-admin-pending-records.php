@@ -355,8 +355,8 @@ class AdminPendingRecords {
 
 		$resolved = wp_normalize_path( $path );
 		$ok_base  = false;
-		if ( class_exists( 'KennelFlow_Vet_Protected_Uploads' ) ) {
-			$medical_base = trailingslashit( wp_normalize_path( KennelFlow_Vet_Protected_Uploads::get_medical_dir() ) );
+		if ( class_exists( '\KennelFlow_Vet_Protected_Uploads' ) ) {
+			$medical_base = trailingslashit( wp_normalize_path( \KennelFlow_Vet_Protected_Uploads::get_medical_dir() ) );
 			if ( 0 === strpos( $resolved, $medical_base ) ) {
 				$ok_base = true;
 			}
@@ -382,7 +382,7 @@ class AdminPendingRecords {
 
 		nocache_headers();
 		header( 'Content-Type: ' . $mime );
-		header( 'Content-Disposition: inline; filename="' . basename( $path ) . '"' );
+		header( 'Content-Disposition: inline; filename="' . sanitize_file_name( basename( $path ) ) . '"' );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile -- binary stream.
 		readfile( $path );
 		exit;

@@ -49,6 +49,7 @@ class Plugin {
 
 		add_action( 'init', array( $this, 'register_content' ), 3 );
 		add_action( 'init', array( $this, 'maybe_boot_portal' ), 6 );
+		add_action( 'plugins_loaded', array( Activator::class, 'maybe_run_version_upgrades' ), 4 );
 		add_action( 'plugins_loaded', array( $this, 'boot_waitlist' ), 5 );
 		add_action( 'plugins_loaded', array( $this, 'maybe_load_woocommerce_modules' ), 20 );
 
@@ -99,6 +100,7 @@ class Plugin {
 	 */
 	public function maybe_boot_portal() {
 		Portal::init();
+		Waiver::init();
 	}
 
 	/**

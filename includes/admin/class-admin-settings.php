@@ -20,6 +20,8 @@ class AdminSettings {
 
 	const OPTION_ALLOW_OWNER_CLINICIAN = 'ltkf_allow_owner_clinician_selection';
 
+	const OPTION_ALLOW_OWNER_ONLINE_BOARDING = 'ltkf_allow_owner_online_boarding';
+
 	const OPTION_VIP_DISCOUNT_PERCENTAGE = 'ltkf_vip_discount_percentage';
 
 	/**
@@ -84,6 +86,16 @@ class AdminSettings {
 
 		register_setting(
 			self::SETTINGS_GROUP,
+			self::OPTION_ALLOW_OWNER_ONLINE_BOARDING,
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => array( __CLASS__, 'sanitize_yes_no' ),
+				'default'           => '1',
+			)
+		);
+
+		register_setting(
+			self::SETTINGS_GROUP,
 			self::OPTION_VIP_DISCOUNT_PERCENTAGE,
 			array(
 				'type'              => 'integer',
@@ -135,6 +147,21 @@ class AdminSettings {
 			array( __CLASS__, 'render_field_allow_owner_clinician' ),
 			self::PAGE_SLUG,
 			'ltkf_kennelflow_clinician_section'
+		);
+
+		add_settings_section(
+			'ltkf_kennelflow_boarding_section',
+			__( 'Online boarding', 'kennelflow-core' ),
+			array( __CLASS__, 'render_boarding_section_description' ),
+			self::PAGE_SLUG
+		);
+
+		add_settings_field(
+			self::OPTION_ALLOW_OWNER_ONLINE_BOARDING,
+			__( 'Allow online boarding booking', 'kennelflow-core' ),
+			array( __CLASS__, 'render_field_allow_owner_online_boarding' ),
+			self::PAGE_SLUG,
+			'ltkf_kennelflow_boarding_section'
 		);
 
 		add_settings_section(
@@ -261,6 +288,15 @@ class AdminSettings {
 	}
 
 	/**
+	 * Online boarding section blurb.
+	 *
+	 * @return void
+	 */
+	public static function render_boarding_section_description() {
+		echo '<p>' . esc_html__( 'When enabled, logged-in pet owners can submit boarding requests through the public booking wizard when their pet meets boarding compliance (signed waiver and required vaccinations) and a kennel is available for the selected dates. Staff can always create bookings from the admin calendar.', 'kennelflow-core' ) . '</p>';
+	}
+
+	/**
 	 * VIP section blurb.
 	 *
 	 * @return void
@@ -296,6 +332,28 @@ class AdminSettings {
 				<?php checked( $on ); ?>
 			/>
 			<?php esc_html_e( 'Expose sanitized clinician data to the public API (GET /kennelflow/v1/public-clinicians).', 'kennelflow-core' ); ?>
+		</label>
+		<?php
+	}
+
+	/**
+	 * Checkbox: allow compliant pet owners to book boarding online.
+	 *
+	 * @return void
+	 */
+	public static function render_field_allow_owner_online_boarding() {
+		$opt = get_option( self::OPTION_ALLOW_OWNER_ONLINE_BOARDING, '1' );
+		$on  = ( '1' === $opt );
+		?>
+		<input type="hidden" name="<?php echo esc_attr( self::OPTION_ALLOW_OWNER_ONLINE_BOARDING ); ?>" value="0" />
+		<label>
+			<input
+				type="checkbox"
+				name="<?php echo esc_attr( self::OPTION_ALLOW_OWNER_ONLINE_BOARDING ); ?>"
+				value="1"
+				<?php checked( $on ); ?>
+			/>
+			<?php esc_html_e( 'Let pet owners submit boarding requests online when waiver and vaccination requirements are met and a kennel is available.', 'kennelflow-core' ); ?>
 		</label>
 		<?php
 	}

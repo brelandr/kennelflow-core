@@ -1,5 +1,77 @@
 /* Occupancy / calendar shell (7-day resource grid). */
 
+.kf-cal-shell-loading {
+	margin: 1em 0;
+	color: #50575e;
+	font-size: 14px;
+}
+
+.kf-cal-diagnostics {
+	margin: 0 0 12px;
+	padding: 12px 16px;
+}
+
+.kf-cal-diagnostics__list {
+	margin: 8px 0 0 1.2em;
+	list-style: disc;
+}
+
+.kf-cal-diagnostics__debug {
+	margin-top: 10px;
+	font-size: 12px;
+}
+
+.kf-cal-diagnostics__debug pre {
+	max-height: 200px;
+	overflow: auto;
+	background: #f6f7f7;
+	padding: 8px;
+	border-radius: 4px;
+}
+
+.kf-cal-debug-panel {
+	margin: 16px 0 0;
+	padding: 12px 14px;
+	border: 1px solid #dba617;
+	background: #fcf9e8;
+	border-radius: 4px;
+	font-size: 13px;
+}
+
+.kf-cal-debug-panel__title {
+	margin: 0 0 8px;
+}
+
+.kf-cal-debug-panel__list {
+	margin: 0 0 10px 1.2em;
+	list-style: disc;
+}
+
+.kf-cal-debug-panel__list code {
+	font-size: 12px;
+}
+
+.kf-cal-debug-panel__error {
+	margin: 0 0 10px;
+	color: #b32d2e;
+}
+
+.kf-cal-debug-panel__actions {
+	margin: 0 0 10px;
+}
+
+.kf-cal-error {
+	padding: 12px 14px;
+	margin: 12px 0;
+}
+
+.kf-booking-modal__hint-list {
+	margin: 8px 16px 0;
+	padding-left: 1.2em;
+	list-style: disc;
+	color: #50575e;
+}
+
 .kf-cal-wrap {
 	max-width: 100%;
 	overflow: auto;
@@ -150,6 +222,21 @@
 	background: #7c3aed;
 }
 
+.kf-cal-event--timed {
+	height: auto;
+	min-height: 24px;
+	max-height: 52px;
+	line-height: 1.25;
+	padding: 4px 6px;
+	white-space: normal;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-weight: 500;
+}
+
 .kf-cal-loading,
 .kf-cal-empty {
 	padding: 16px;
@@ -172,6 +259,16 @@
 	justify-content: center;
 	padding: 40px 16px;
 	overflow: auto;
+}
+
+body.kf-cal-modal-open {
+	overflow: hidden;
+}
+
+.kf-booking-modal__loading {
+	padding: 24px 16px;
+	margin: 0;
+	color: #50575e;
 }
 
 .kf-booking-modal {
@@ -549,6 +646,137 @@
 	margin-top: 14px;
 	padding-top: 12px;
 	border-top: 1px solid #dcdcde;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+}
+
+.kf-cal-popover__hint--error {
+	color: #b32d2e;
+}
+
+.kf-cal-groom-photos {
+	margin-top: 14px;
+	padding-top: 12px;
+	border-top: 1px solid #dcdcde;
+}
+
+.kf-cal-groom-photos__heading {
+	margin: 0 0 10px;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.kf-cal-groom-photos__section {
+	margin-bottom: 10px;
+}
+
+.kf-cal-groom-photos__section strong {
+	display: block;
+	margin-bottom: 6px;
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+	color: #50575e;
+}
+
+.kf-cal-groom-photos__grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.kf-cal-groom-photos__item {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+}
+
+.kf-cal-groom-photos__item img {
+	object-fit: cover;
+	border-radius: 4px;
+	border: 1px solid #dcdcde;
+}
+
+.kf-cal-groom-photos__actions,
+.kf-cal-groom-photos__row-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+.kf-cal-groom-photos__file {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect( 0, 0, 0, 0 );
+	white-space: nowrap;
+}
+
+.kf-device-camera {
+	position: fixed;
+	inset: 0;
+	z-index: 100010;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.kf-device-camera__backdrop {
+	position: absolute;
+	inset: 0;
+	background: rgba( 0, 0, 0, 0.55 );
+}
+
+.kf-device-camera__panel {
+	position: relative;
+	z-index: 1;
+	width: min( 92vw, 420px );
+	padding: 16px;
+	background: #fff;
+	border-radius: 8px;
+	box-shadow: 0 8px 32px rgba( 0, 0, 0, 0.25 );
+}
+
+.kf-device-camera__title {
+	margin: 0 0 12px;
+	font-size: 16px;
+}
+
+.kf-device-camera__video {
+	display: block;
+	width: 100%;
+	max-height: 55vh;
+	background: #000;
+	border-radius: 4px;
+	object-fit: cover;
+}
+
+.kf-device-camera__error {
+	margin: 0 0 12px;
+	color: #b32d2e;
+}
+
+.kf-device-camera__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	justify-content: flex-end;
+	margin-top: 12px;
+}
+
+.kf-cal-popover__record-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.kf-cal-popover__record-links .button {
+	margin: 0;
 }
 
 .kf-cal-popover__hint {

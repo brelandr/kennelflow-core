@@ -7,6 +7,7 @@
 
 namespace Landtech\KennelFlow\Core;
 
+defined( 'ABSPATH' ) || exit;
 defined( 'WP_CLI' ) || exit;
 
 /**

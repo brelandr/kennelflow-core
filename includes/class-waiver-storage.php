@@ -9,10 +9,6 @@ namespace Landtech\KennelFlow\Core;
 
 defined( 'ABSPATH' ) || exit;
 
-if ( ! class_exists( 'Waiver', false ) ) {
-	require_once LTKF_PLUGIN_DIR . 'includes/class-waiver.php';
-}
-
 /**
  * Class WaiverStorage
  */
@@ -29,13 +25,56 @@ class WaiverStorage {
 	const MAX_BYTES = 2097152;
 
 	/**
+	 * Ensure WP_Filesystem is ready and FS_CHMOD_* constants exist (frontend AJAX safe).
+	 *
+	 * @return \WP_Filesystem_Base|false
+	 */
+	private static function get_filesystem() {
+		global $wp_filesystem;
+
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+
+		if ( empty( $wp_filesystem ) ) {
+			WP_Filesystem( false, false, true );
+		}
+
+		if ( ! defined( 'FS_CHMOD_FILE' ) ) {
+			$perms = @fileperms( ABSPATH . 'index.php' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Best-effort default when FS constants were never bootstrapped.
+			define( 'FS_CHMOD_FILE', ( false !== $perms ? ( $perms & 0777 ) : 0 ) | 0644 );
+		}
+
+		if ( ! defined( 'FS_CHMOD_DIR' ) ) {
+			$perms = @fileperms( ABSPATH ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Best-effort default when FS constants were never bootstrapped.
+			define( 'FS_CHMOD_DIR', ( false !== $perms ? ( $perms & 0777 ) : 0 ) | 0755 );
+		}
+
+		return ! empty( $wp_filesystem ) ? $wp_filesystem : false;
+	}
+
+	/**
+	 * Write a file via WP_Filesystem.
+	 *
+	 * @param string $path    Absolute path.
+	 * @param string $content File contents.
+	 * @return bool
+	 */
+	private static function put_file_contents( $path, $content ) {
+		$wp_filesystem = self::get_filesystem();
+		if ( ! $wp_filesystem ) {
+			return false;
+		}
+
+		return (bool) $wp_filesystem->put_contents( $path, $content, FS_CHMOD_FILE );
+	}
+
+	/**
 	 * Absolute uploads base + relative protected path (matches KennelFlow Vet default).
 	 *
 	 * @return string
 	 */
 	public static function get_protected_base_dir() {
-		if ( class_exists( 'KennelFlow_Vet_Protected_Uploads' ) ) {
-			return untrailingslashit( KennelFlow_Vet_Protected_Uploads::get_medical_dir() );
+		if ( class_exists( '\KennelFlow_Vet_Protected_Uploads' ) ) {
+			return untrailingslashit( \KennelFlow_Vet_Protected_Uploads::get_medical_dir() );
 		}
 
 		$upload = wp_upload_dir();
@@ -60,8 +99,10 @@ class WaiverStorage {
 	 * @return void
 	 */
 	public static function maybe_bootstrap_protected_dir() {
-		if ( class_exists( 'KennelFlow_Vet_Protected_Uploads' ) ) {
-			KennelFlow_Vet_Protected_Uploads::maybe_create_htaccess();
+		self::get_filesystem();
+
+		if ( class_exists( '\KennelFlow_Vet_Protected_Uploads' ) ) {
+			\KennelFlow_Vet_Protected_Uploads::maybe_create_htaccess();
 			return;
 		}
 
@@ -76,14 +117,7 @@ class WaiverStorage {
 
 		$index = trailingslashit( $base ) . 'index.php';
 		if ( ! file_exists( $index ) ) {
-			global $wp_filesystem;
-			if ( empty( $wp_filesystem ) ) {
-				require_once ABSPATH . 'wp-admin/includes/file.php';
-				WP_Filesystem( false, false, true );
-			}
-			if ( $wp_filesystem ) {
-				$wp_filesystem->put_contents( $index, "<?php\n// Silence is golden.\n", FS_CHMOD_FILE );
-			}
+			self::put_file_contents( $index, '' );
 		}
 
 		$ht = trailingslashit( $base ) . '.htaccess';
@@ -91,14 +125,7 @@ class WaiverStorage {
 			return;
 		}
 
-		global $wp_filesystem;
-		if ( empty( $wp_filesystem ) ) {
-			require_once ABSPATH . 'wp-admin/includes/file.php';
-			WP_Filesystem( false, false, true );
-		}
-		if ( $wp_filesystem ) {
-			$wp_filesystem->put_contents( $ht, "# KennelFlow — deny direct access to protected uploads\nDeny from all\n", FS_CHMOD_FILE );
-		}
+		self::put_file_contents( $ht, "# KennelFlow — deny direct access to protected uploads\nDeny from all\n" );
 	}
 
 	/**
@@ -217,13 +244,7 @@ class WaiverStorage {
 			}
 		}
 
-		global $wp_filesystem;
-		if ( empty( $wp_filesystem ) ) {
-			require_once ABSPATH . 'wp-admin/includes/file.php';
-			WP_Filesystem( false, false, true );
-		}
-
-		if ( ! $wp_filesystem || ! $wp_filesystem->put_contents( $full, $raw, FS_CHMOD_FILE ) ) {
+		if ( ! self::put_file_contents( $full, $raw ) ) {
 			return new \WP_Error( 'ltkf_waiver_write', __( 'Could not save signature file.', 'kennelflow-core' ) );
 		}
 

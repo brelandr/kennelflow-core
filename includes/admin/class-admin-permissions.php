@@ -120,7 +120,7 @@ class AdminPermissions {
 						return;
 					}
 					printf(
-						'<div class="notice notice-error"><p>%s</p></div>',
+						'<div class="notice notice-error is-dismissible"><p>%s</p></div>',
 						esc_html__( 'KennelFlow Staff Permissions is missing the compiled bundle. From the kennelflow-core plugin folder, run: npm install && npm run build (then upload the build/ folder: permissions-matrix.js, permissions-matrix.css, permissions-matrix.asset.php).', 'kennelflow-core' )
 					);
 				}

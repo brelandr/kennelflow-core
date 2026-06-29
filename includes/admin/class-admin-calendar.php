@@ -122,7 +122,7 @@ class AdminCalendar {
 							return;
 						}
 						printf(
-							'<div class="notice notice-error"><p>%s</p></div>',
+							'<div class="notice notice-error is-dismissible"><p>%s</p></div>',
 							esc_html__( 'KennelFlow Hub calendar is missing the compiled bundle. From the kennelflow-core plugin folder, run: npm install && npm run build (then upload the build/ folder: index.js, index.css, index.asset.php).', 'kennelflow-core' )
 						);
 					}
@@ -131,42 +131,7 @@ class AdminCalendar {
 			return;
 		}
 
-		$asset_file = LTKF_PLUGIN_DIR . 'build/index.asset.php';
-		$asset      = array(
-			'dependencies' => array(),
-			'version'      => LTKF_CORE_VERSION,
-		);
-		if ( is_readable( $asset_file ) ) {
-			$loaded = require $asset_file;
-			if ( is_array( $loaded ) ) {
-				$asset = array_merge( $asset, $loaded );
-			}
-		}
-
-		wp_enqueue_script(
-			self::SCRIPT_HANDLE,
-			LTKF_PLUGIN_URL . 'build/index.js',
-			$asset['dependencies'],
-			$asset['version'],
-			true
-		);
-
-		$localized = ltkf_get_calendar_localized_settings();
-
-		wp_localize_script(
-			self::SCRIPT_HANDLE,
-			'kfCalendarSettings',
-			$localized
-		);
-
-		wp_set_script_translations( self::SCRIPT_HANDLE, 'kennelflow-core', LTKF_PLUGIN_DIR . 'languages' );
-
-		wp_enqueue_style(
-			self::SCRIPT_HANDLE,
-			LTKF_PLUGIN_URL . 'build/index.css',
-			array(),
-			$asset['version']
-		);
+		ltkf_enqueue_hub_calendar_bundle( self::SCRIPT_HANDLE );
 	}
 
 	/**
@@ -185,12 +150,21 @@ class AdminCalendar {
 	}
 
 	/**
+	 * UTC week range for the front-end `[ltkf_hub_calendar]` shortcode shell.
+	 *
+	 * @return array{0:string,1:string} start_date, end_date
+	 */
+	public static function get_shell_week_range_utc() {
+		return self::current_week_range_utc();
+	}
+
+	/**
 	 * Render admin page.
 	 *
 	 * @return void
 	 */
 	public static function render_page() {
-		if ( ! current_user_can( self::required_cap() ) ) {
+		if ( ! ltkf_user_can_view_hub_calendar() ) {
 			wp_die( esc_html__( 'You do not have permission to view this page.', 'kennelflow-core' ) );
 		}
 
@@ -199,13 +173,44 @@ class AdminCalendar {
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
-			<p class="description"><?php esc_html_e( 'Drag bookings to reschedule or move between resources. Times are stored in UTC.', 'kennelflow-core' ); ?></p>
-			<div
-				id="kf-admin-calendar-root"
-				class="kf-admin-calendar-root"
-				data-start-date="<?php echo esc_attr( $start_date ); ?>"
-				data-end-date="<?php echo esc_attr( $end_date ); ?>"
-			></div>
+			<p class="description"><?php
+			printf(
+				/* translators: %s: site timezone string from Settings → General */
+				esc_html__( 'Drag bookings to reschedule or move between resources. Times display in %s.', 'kennelflow-core' ),
+				esc_html( function_exists( 'wp_timezone_string' ) ? wp_timezone_string() : 'UTC' )
+			);
+			?></p>
+			<?php
+			if ( ! ltkf_hub_calendar_bundle_readable() ) {
+				printf(
+					'<div class="notice notice-error inline"><p>%s</p></div>',
+					esc_html__( 'Calendar JavaScript is missing. Run npm install && npm run build in the KennelFlow Core plugin folder, then redeploy the build/ directory.', 'kennelflow-core' )
+				);
+			} elseif ( ! wp_script_is( self::SCRIPT_HANDLE, 'enqueued' ) ) {
+				printf(
+					'<div class="notice notice-warning inline"><p>%s</p></div>',
+					esc_html__( 'Calendar scripts did not load on this screen. Try reloading the page; if the grid stays empty, check the browser console for JavaScript errors.', 'kennelflow-core' )
+				);
+			}
+
+			$booking_diag = ltkf_get_calendar_add_booking_diagnostics( ltkf_get_calendar_localized_settings() );
+			if ( is_array( $booking_diag ) && empty( $booking_diag['ready'] ) && ! empty( $booking_diag['issues'] ) ) {
+				echo '<div class="notice notice-warning inline"><p><strong>' . esc_html__( 'Add booking requires KennelFlow Boarding', 'kennelflow-core' ) . '</strong></p><ul style="margin-left:1.2em;list-style:disc;">';
+				foreach ( (array) $booking_diag['issues'] as $issue ) {
+					echo '<li>' . esc_html( (string) $issue ) . '</li>';
+				}
+				echo '</ul></div>';
+			}
+
+			echo ltkf_get_hub_calendar_shell_markup(
+				array(
+					'id'         => 'kf-admin-calendar-root',
+					'class'      => 'kf-admin-calendar-root',
+					'start_date' => $start_date,
+					'end_date'   => $end_date,
+				)
+			);
+			?>
 		</div>
 		<?php
 	}

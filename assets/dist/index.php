@@ -1,2 +1,7 @@
 <?php
-// Silence is golden.
+/**
+ * Silence is golden.
+ *
+ * @package KennelFlow_Core
+ */
+defined( 'ABSPATH' ) || exit;

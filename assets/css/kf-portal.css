@@ -142,6 +142,24 @@
 	border: 1px solid #e8b4b4;
 }
 
+.kf-portal__action-hint {
+	display: block;
+	margin-top: 0.35rem;
+	font-size: 0.875rem;
+	line-height: 1.45;
+	color: #5a3030;
+	max-width: 40rem;
+}
+
+.kf-portal__pay-hint {
+	display: block;
+	margin-top: 0.35rem;
+	font-size: 0.875rem;
+	line-height: 1.45;
+	color: #5a3030;
+	max-width: 18rem;
+}
+
 .kf-portal__badge--pending {
 	background: #fff8e5;
 	color: #8a6d1d;
@@ -209,11 +227,6 @@
 	overflow: hidden;
 }
 
-.kf-portal__pay-hint {
-	font-size: 0.85rem;
-	color: #8b2b2b;
-}
-
 /* Legal waivers / signature */
 .kf-waiver__liability {
 	margin-bottom: 1rem;
@@ -266,4 +279,64 @@
 	background: #fcf0f0;
 	border: 1px solid #c00;
 	color: #600;
+}
+
+/* Add pet */
+.kf-portal__add-pet {
+	margin-bottom: 1.5rem;
+	padding: 1rem 1.25rem;
+	background: #f6f7f9;
+	border: 1px solid #d0d5dd;
+	border-radius: 4px;
+}
+
+.kf-portal__add-pet .kf-portal__subheading {
+	margin-top: 0;
+}
+
+.kf-portal__add-pet-form {
+	margin: 0;
+}
+
+.kf-portal__add-pet-field {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem 0.75rem;
+	margin: 0 0 0.75rem;
+}
+
+.kf-portal__add-pet-input {
+	min-width: 12rem;
+	max-width: 100%;
+	flex: 1 1 12rem;
+}
+
+.kf-portal__add-pet-actions {
+	margin: 0;
+}
+
+.kf-portal__add-pet-msg {
+	margin: 0.75rem 0 0;
+	font-size: 0.95rem;
+}
+
+.kf-portal__add-pet-msg--error {
+	color: #b32d2e;
+}
+
+.kf-portal__waitlist-pets {
+	border: 0;
+	margin: 0 0 0.75rem;
+	padding: 0;
+}
+
+.kf-portal__waitlist-pets legend {
+	font-weight: 600;
+	margin-bottom: 0.35rem;
+}
+
+.kf-portal__waitlist-pet-choice {
+	display: block;
+	margin: 0.35rem 0;
 }

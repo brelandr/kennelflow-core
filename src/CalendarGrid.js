@@ -10,6 +10,21 @@ import apiFetch from '@wordpress/api-fetch';
 import { __, sprintf } from '@wordpress/i18n';
 
 import { BookingModal } from './BookingModal';
+import { BookingRecordLinks } from './BookingRecordLinks';
+import { CalendarDebugPanel } from './CalendarDebugPanel';
+import { BookingSessionPhotos } from './GroomSessionPhotos';
+import { resolveBookingSessionPhotoSettings } from './bookingSessionPhotoUtils';
+import {
+	formatApiFetchError,
+	isCalendarDebugEnabled,
+	logCalendarTrace,
+} from './calendarDebug';
+import { renderInBodyPortal } from './calendarPortal';
+import {
+	formatUtcMysqlInSiteTimezone,
+	getSiteTimezone,
+	getSiteTimezoneLabel,
+} from './calendarTimezone';
 import './CalendarGrid.css';
 
 /**
@@ -63,8 +78,25 @@ function isGroomingBooking( booking ) {
 }
 
 /**
- * Boarding stays (not clinic or grooming).
- *
+ * @param {object} booking
+ * @return {boolean}
+ */
+function canCheckInBooking( booking ) {
+	const postId = parseInt( booking?.booking_post_id, 10 );
+	if ( postId < 1 ) {
+		return false;
+	}
+	const status = String( booking?.status || '' )
+		.trim()
+		.toLowerCase();
+	return (
+		'pending' === status ||
+		'pending_payment' === status ||
+		'confirmed' === status
+	);
+}
+
+/**
  * @param {object} booking
  * @return {boolean}
  */
@@ -73,15 +105,27 @@ function isBoardingBooking( booking ) {
 }
 
 /**
+ * Timed appointments (grooming / clinic) use day-column layout, not week-span width.
+ *
+ * @param {object} booking
+ * @return {boolean}
+ */
+function isTimedBooking( booking ) {
+	return isClinicBooking( booking ) || isGroomingBooking( booking );
+}
+
+/** @type {number} */
+const TIMED_EVENT_LANE_HEIGHT = 28;
+
+/** @type {number} */
+const TIMED_DAY_COLUMNS = 7;
+
+/**
  * @param {string} mysqlUtc
  * @return {string}
  */
 function formatPopoverDateTime( mysqlUtc ) {
-	const d = parseMysqlUtc( mysqlUtc );
-	if ( 0 === d.getTime() ) {
-		return '—';
-	}
-	return d.toLocaleString( undefined, {
+	return formatUtcMysqlInSiteTimezone( mysqlUtc, {
 		dateStyle: 'medium',
 		timeStyle: 'short',
 	} );
@@ -179,7 +223,134 @@ function layoutEventInWeek( booking, weekStart, weekEnd ) {
 		left: Math.max( 0, left ),
 		width: Math.max( 0.35, Math.min( 100 - left, width ) ),
 		visible: true,
+		mode: 'span',
 	};
+}
+
+/**
+ * Day index (0–6) for a timed booking within the visible week.
+ *
+ * @param {object} booking
+ * @param {Date}   weekStart Inclusive UTC
+ * @param {Date}   weekEnd   Exclusive UTC
+ * @return {number|null}
+ */
+function getTimedDayIndex( booking, weekStart, weekEnd ) {
+	const start = parseMysqlUtc( booking.start_gmt );
+	const end = parseMysqlUtc( booking.end_gmt );
+	if ( end <= weekStart || start >= weekEnd ) {
+		return null;
+	}
+	const clipStart = start < weekStart ? weekStart : start;
+	const dayMs = 86400000;
+	const dayIndex = Math.floor(
+		( clipStart.getTime() - weekStart.getTime() ) / dayMs
+	);
+	if ( dayIndex < 0 || dayIndex >= TIMED_DAY_COLUMNS ) {
+		return null;
+	}
+	return dayIndex;
+}
+
+/**
+ * Stack timed bookings vertically within each day column (per resource row).
+ *
+ * @param {object[]} bookings
+ * @param {Date}     weekStart Inclusive UTC
+ * @param {Date}     weekEnd   Exclusive UTC
+ * @return {{ lanes: Map<number, number>, maxLane: number }}
+ */
+function computeTimedLanesForResource( bookings, weekStart, weekEnd ) {
+	const lanes = new Map();
+	const dayCounts = {};
+	let maxLane = 0;
+
+	const timed = ( bookings || [] )
+		.filter( ( b ) => isTimedBooking( b ) )
+		.sort(
+			( a, b ) =>
+				parseMysqlUtc( a.start_gmt ).getTime() -
+				parseMysqlUtc( b.start_gmt ).getTime()
+		);
+
+	timed.forEach( ( booking ) => {
+		const dayIndex = getTimedDayIndex( booking, weekStart, weekEnd );
+		if ( null === dayIndex ) {
+			return;
+		}
+		const dayKey = String( dayIndex );
+		const lane = dayCounts[ dayKey ] || 0;
+		dayCounts[ dayKey ] = lane + 1;
+		lanes.set( booking.id, lane );
+		if ( lane > maxLane ) {
+			maxLane = lane;
+		}
+	} );
+
+	return { lanes, maxLane };
+}
+
+/**
+ * Layout a timed appointment in its day column (readable width for short slots).
+ *
+ * @param {object} booking
+ * @param {Date}   weekStart Inclusive UTC
+ * @param {Date}   weekEnd   Exclusive UTC
+ * @param {number} lane      Vertical stack index within the day column
+ * @return {{left:number,width:number,top:number,mode:string,visible:boolean}|null}
+ */
+function layoutTimedEventInWeek( booking, weekStart, weekEnd, lane ) {
+	const dayIndex = getTimedDayIndex( booking, weekStart, weekEnd );
+	if ( null === dayIndex ) {
+		return null;
+	}
+	const colWidth = 100 / TIMED_DAY_COLUMNS;
+	const gap = 0.6;
+	const left = dayIndex * colWidth + gap / 2;
+	const width = colWidth - gap;
+	const top = 6 + lane * TIMED_EVENT_LANE_HEIGHT;
+	return {
+		left: Math.max( 0, left ),
+		width: Math.max( colWidth * 0.85, width ),
+		top,
+		mode: 'timed',
+		visible: true,
+	};
+}
+
+/**
+ * @param {object} booking
+ * @return {string}
+ */
+function formatTimedEventLabel( booking ) {
+	const siteTz = getSiteTimezone();
+	const start = parseMysqlUtc( booking.start_gmt );
+	const end = parseMysqlUtc( booking.end_gmt );
+	let timeLabel = '—';
+	if ( 0 !== start.getTime() ) {
+		const timeOpts = {
+			hour: 'numeric',
+			minute: '2-digit',
+			timeZone: siteTz,
+		};
+		const startTime = start.toLocaleTimeString( undefined, timeOpts );
+		if ( 0 !== end.getTime() && end.getTime() > start.getTime() ) {
+			const endTime = end.toLocaleTimeString( undefined, timeOpts );
+			timeLabel = `${ startTime }–${ endTime }`;
+		} else {
+			timeLabel = startTime;
+		}
+	}
+	const pet =
+		booking.pet_name && String( booking.pet_name ).trim() !== ''
+			? String( booking.pet_name ).trim()
+			: '';
+	const owner =
+		booking.owner_name && String( booking.owner_name ).trim() !== ''
+			? String( booking.owner_name ).trim()
+			: '';
+	const parts = [ timeLabel, pet, owner ].filter( ( part ) => '' !== part );
+	return parts.length > 0 ? parts.join( ' · ' ) : __( 'Booking', 'kennelflow-core' );
 }
 
 /**
@@ -216,14 +387,12 @@ export function CalendarGrid( {
 
 
 	const [ bookingModalOpen, setBookingModalOpen ] = useState( false );
+	const [ bookingModalMode, setBookingModalMode ] = useState( 'booking' );
 	const [ popoverBooking, setPopoverBooking ] = useState( null );
-
-	const kennelpressBookingsUrl =
-		typeof window !== 'undefined' &&
-		window.kfCalendarSettings &&
-		window.kfCalendarSettings.kennelpress_bookings_url
-			? window.kfCalendarSettings.kennelpress_bookings_url
-			: '';
+	const [ checkInBusy, setCheckInBusy ] = useState( false );
+	const [ checkInError, setCheckInError ] = useState( '' );
+	const [ debugAction, setDebugAction ] = useState( '' );
+	const [ lastError, setLastError ] = useState( null );
 
 	const queryClient = useQueryClient();
 	const kindTrim = ( bookingKind || '' ).trim();
@@ -273,6 +442,7 @@ export function CalendarGrid( {
 	);
 
 	const dayLabels = useMemo( () => {
+		const siteTz = getSiteTimezone();
 		const out = [];
 		for ( let i = 0; i < 7; i++ ) {
 			const d = new Date( weekStart.getTime() + i * 86400000 );
@@ -281,12 +451,69 @@ export function CalendarGrid( {
 					weekday: 'short',
 					month: 'short',
 					day: 'numeric',
-					timeZone: 'UTC',
+					timeZone: siteTz,
 				} )
 			);
 		}
 		return out;
 	}, [ weekStart ] );
+
+	const timezoneLabel = useMemo( () => getSiteTimezoneLabel(), [] );
+
+	const calendarSettings =
+		typeof window !== 'undefined' && window.kfCalendarSettings
+			? window.kfCalendarSettings
+			: {};
+	const addBookingDiagnostics = calendarSettings.add_booking_diagnostics || null;
+
+	const handleAddBookingClick = useCallback( () => {
+		const stamp = new Date().toISOString();
+		setDebugAction( `Add booking clicked @ ${ stamp }` );
+		logCalendarTrace( 'Add booking clicked', {
+			diagnostics: addBookingDiagnostics,
+			kennelpress_bookings_url: calendarSettings.kennelpress_bookings_url || '',
+			bookings_create_path: calendarSettings.bookings_create_path || '',
+			modalWasOpen: bookingModalOpen,
+		} );
+		setBookingModalMode( 'booking' );
+		setBookingModalOpen( true );
+	}, [ addBookingDiagnostics, calendarSettings, bookingModalOpen ] );
+
+	const handleAddWalkInClick = useCallback( () => {
+		const stamp = new Date().toISOString();
+		setDebugAction( `Add walk-in clicked @ ${ stamp }` );
+		logCalendarTrace( 'Add walk-in clicked', {
+			diagnostics: addBookingDiagnostics,
+			kennelpress_bookings_url: calendarSettings.kennelpress_bookings_url || '',
+		} );
+		setBookingModalMode( 'walk_in' );
+		setBookingModalOpen( true );
+	}, [ addBookingDiagnostics, calendarSettings ] );
+
+	const handleForceOpenModal = useCallback( () => {
+		setDebugAction( 'Force open modal (debug panel)' );
+		logCalendarTrace( 'Force open modal', null );
+		setBookingModalOpen( true );
+	}, [] );
+
+	useEffect( () => {
+		logCalendarTrace( 'bookingModalOpen changed', { bookingModalOpen } );
+		setDebugAction(
+			bookingModalOpen
+				? `Modal open @ ${ new Date().toISOString() }`
+				: `Modal closed @ ${ new Date().toISOString() }`
+		);
+	}, [ bookingModalOpen ] );
+
+	useEffect( () => {
+		const onDebugOpen = () => {
+			handleForceOpenModal();
+		};
+		document.addEventListener( 'kf-cal-debug-open-modal', onDebugOpen );
+		return () => {
+			document.removeEventListener( 'kf-cal-debug-open-modal', onDebugOpen );
+		};
+	}, [ handleForceOpenModal ] );
 
 	const resources = useMemo( () => {
 		const normalizeRow = ( r ) => {
@@ -369,6 +596,19 @@ export function CalendarGrid( {
 		} );
 		return map;
 	}, [ bookings, resources ] );
+
+	const timedLayoutByResource = useMemo( () => {
+		const map = {};
+		resources.forEach( ( res ) => {
+			const { lanes, maxLane } = computeTimedLanesForResource(
+				eventsByResource[ res.id ] || [],
+				weekStart,
+				weekEnd
+			);
+			map[ res.id ] = { lanes, maxLane };
+		} );
+		return map;
+	}, [ eventsByResource, resources, weekStart, weekEnd ] );
 
 	const shiftWeek = ( delta ) => {
 		setRange( ( prev ) => ( {
@@ -591,6 +831,127 @@ export function CalendarGrid( {
 		return '' !== String( nonce ).trim();
 	}, [ popoverBooking ] );
 
+	const popoverCanCheckIn = useMemo( () => {
+		if ( ! popoverBooking ) {
+			return false;
+		}
+		return canCheckInBooking( popoverBooking );
+	}, [ popoverBooking ] );
+
+	const handleCheckIn = useCallback( async () => {
+		if ( ! popoverBooking || checkInBusy ) {
+			return;
+		}
+		const indexId = parseInt( popoverBooking.id, 10 );
+		if ( indexId < 1 ) {
+			return;
+		}
+
+		setCheckInError( '' );
+		setCheckInBusy( true );
+
+		const previousState = queryClient.getQueryData( calendarQueryKey );
+		const previousSnapshot =
+			undefined !== previousState
+				? cloneCalendarQueryData( previousState )
+				: undefined;
+
+		queryClient.setQueryData( calendarQueryKey, ( old ) => {
+			if ( ! old ) {
+				return old;
+			}
+			return {
+				...old,
+				bookings: ( old.bookings || [] ).map( ( b ) =>
+					b.id === indexId ? { ...b, status: 'checked_in' } : b
+				),
+			};
+		} );
+		setPopoverBooking( ( prev ) =>
+			prev && prev.id === indexId ? { ...prev, status: 'checked_in' } : prev
+		);
+
+		try {
+			const resp = await apiFetch( {
+				path: `/kennelflow/v1/calendar/booking/${ indexId }/check-in`,
+				method: 'POST',
+			} );
+			if ( resp && resp.booking && 'object' === typeof resp.booking ) {
+				const updated = resp.booking;
+				queryClient.setQueryData( calendarQueryKey, ( old ) => {
+					if ( ! old ) {
+						return old;
+					}
+					return {
+						...old,
+						bookings: ( old.bookings || [] ).map( ( b ) =>
+							b.id === indexId ? { ...b, ...updated } : b
+						),
+					};
+				} );
+				setPopoverBooking( updated );
+			}
+		} catch ( err ) {
+			if ( undefined !== previousSnapshot ) {
+				queryClient.setQueryData( calendarQueryKey, previousSnapshot );
+			}
+			setPopoverBooking( ( prev ) => {
+				if ( ! prev || prev.id !== indexId || ! previousSnapshot ) {
+					return prev;
+				}
+				const prior = ( previousSnapshot.bookings || [] ).find(
+					( b ) => b.id === indexId
+				);
+				return prior || prev;
+			} );
+			setCheckInError(
+				getCalendarPatchErrorMessage( err ) ||
+					__( 'Could not check in patient.', 'kennelflow-core' )
+			);
+		} finally {
+			setCheckInBusy( false );
+			await queryClient.invalidateQueries( { queryKey: [ 'calendar' ] } );
+		}
+	}, [
+		popoverBooking,
+		checkInBusy,
+		queryClient,
+		calendarQueryKey,
+	] );
+
+	const defaultBookingKindSetting = String(
+		calendarSettings.default_booking_kind || ''
+	)
+		.trim()
+		.toLowerCase();
+	const showWalkInButton =
+		( 'clinic' === kindTrim || 'clinic' === defaultBookingKindSetting ) &&
+		( ! addBookingDiagnostics || !! addBookingDiagnostics.ready );
+
+	const sessionPhotoSettings = useMemo( () => {
+		if ( ! popoverBooking ) {
+			return null;
+		}
+		return resolveBookingSessionPhotoSettings(
+			calendarSettings,
+			popoverBooking
+		);
+	}, [ calendarSettings, popoverBooking ] );
+
+	const showSessionPhotos = useMemo( () => {
+		if ( ! popoverBooking || ! sessionPhotoSettings ) {
+			return false;
+		}
+		return parseInt( popoverBooking.booking_post_id, 10 ) > 0;
+	}, [ popoverBooking, sessionPhotoSettings ] );
+
+	useEffect( () => {
+		if ( ! popoverBooking ) {
+			setCheckInError( '' );
+			setCheckInBusy( false );
+		}
+	}, [ popoverBooking ] );
+
 	useEffect( () => {
 		window.addEventListener( 'pointermove', onPointerMoveEvent );
 		window.addEventListener( 'pointerup', onPointerUpEvent );
@@ -620,6 +981,28 @@ export function CalendarGrid( {
 
 	return (
 		<div className="kf-cal-wrap">
+			{ addBookingDiagnostics && ! addBookingDiagnostics.ready ? (
+				<div className="kf-cal-diagnostics notice notice-warning">
+					<p>
+						<strong>
+							{ __( 'Add booking is not available yet', 'kennelflow-core' ) }
+						</strong>
+					</p>
+					<ul className="kf-cal-diagnostics__list">
+						{ ( addBookingDiagnostics.issues || [] ).map( ( issue, index ) => (
+							<li key={ index }>{ issue }</li>
+						) ) }
+					</ul>
+					{ isCalendarDebugEnabled() ? (
+						<details className="kf-cal-diagnostics__debug">
+							<summary>
+								{ __( 'Technical details (debug)', 'kennelflow-core' ) }
+							</summary>
+							<pre>{ JSON.stringify( addBookingDiagnostics, null, 2 ) }</pre>
+						</details>
+					) : null }
+				</div>
+			) : null }
 			<div className="kf-cal-toolbar">
 				<button type="button" onClick={ () => shiftWeek( -1 ) }>
 					{ __( '← Previous week', 'kennelflow-core' ) }
@@ -627,21 +1010,29 @@ export function CalendarGrid( {
 				<button type="button" onClick={ () => shiftWeek( 1 ) }>
 					{ __( 'Next week →', 'kennelflow-core' ) }
 				</button>
-				{ kennelpressBookingsUrl ? (
+				<button
+					type="button"
+					className="button button-primary"
+					onClick={ handleAddBookingClick }
+				>
+					{ __( 'Add booking', 'kennelflow-core' ) }
+				</button>
+				{ showWalkInButton ? (
 					<button
 						type="button"
-						className="button button-primary"
-						onClick={ () => setBookingModalOpen( true ) }
+						className="button"
+						onClick={ handleAddWalkInClick }
 					>
-						{ __( 'Add booking', 'kennelflow-core' ) }
+						{ __( 'Add walk-in', 'kennelflow-core' ) }
 					</button>
 				) : null }
 				<span>
 					{ sprintf(
-						/* translators: 1: start Y-m-d, 2: end Y-m-d */
-						__( '%1$s – %2$s (UTC)', 'kennelflow-core' ),
+						/* translators: 1: start Y-m-d, 2: end Y-m-d, 3: site timezone label */
+						__( '%1$s – %2$s (%3$s)', 'kennelflow-core' ),
 						range.start,
-						range.end
+						range.end,
+						timezoneLabel
 					) }
 				</span>
 			</div>
@@ -685,12 +1076,30 @@ export function CalendarGrid( {
 						<div
 							className="kf-cal-track"
 							data-kf-resource-row={ String( res.id ) }
+							style={ {
+								minHeight:
+									56 +
+									( timedLayoutByResource[ res.id ]?.maxLane || 0 ) *
+										TIMED_EVENT_LANE_HEIGHT,
+							} }
 						>
 							{ Array.from( { length: 7 } ).map( ( _, i ) => (
 								<div key={ i } className="kf-cal-daycell" />
 							) ) }
 							{ ( eventsByResource[ res.id ] || [] ).map( ( b ) => {
-								const layout = layoutEventInWeek( b, weekStart, weekEnd );
+								const timed = isTimedBooking( b );
+								const timedMeta = timedLayoutByResource[ res.id ];
+								const lane = timed
+									? timedMeta?.lanes.get( b.id ) ?? 0
+									: 0;
+								const layout = timed
+									? layoutTimedEventInWeek(
+											b,
+											weekStart,
+											weekEnd,
+											lane
+									  )
+									: layoutEventInWeek( b, weekStart, weekEnd );
 								if ( ! layout ) {
 									return null;
 								}
@@ -702,16 +1111,24 @@ export function CalendarGrid( {
 								} else if ( grooming ) {
 									eventMod = 'kf-cal-event--grooming';
 								}
-								const title = `${ b.pet_name } · ${ b.owner_name || '—' }`;
+								const title = timed
+									? formatTimedEventLabel( b )
+									: `${ b.pet_name } · ${ b.owner_name || '—' }`;
+								const style = {
+									left: `${ layout.left }%`,
+									width: `${ layout.width }%`,
+								};
+								if ( timed && undefined !== layout.top ) {
+									style.top = `${ layout.top }px`;
+								}
 								return (
 									<div
 										key={ b.id }
-										className={ `kf-cal-event ${ eventMod }` }
+										className={ `kf-cal-event ${ eventMod }${
+											timed ? ' kf-cal-event--timed' : ''
+										}` }
 										data-booking-id={ b.id }
-										style={ {
-											left: `${ layout.left }%`,
-											width: `${ layout.width }%`,
-										} }
+										style={ style }
 										title={ title }
 										onPointerDown={ ( e ) => onPointerDownEvent( e, b ) }
 										role="button"
@@ -729,96 +1146,152 @@ export function CalendarGrid( {
 				<p className="kf-cal-empty">{ __( 'No bookings in this range.', 'kennelflow-core' ) }</p>
 			) }
 
-			{ bookingModalOpen ? (
-				<BookingModal
-					open={ bookingModalOpen }
-					onClose={ () => setBookingModalOpen( false ) }
-					weekRange={ range }
-				/>
-			) : null }
-
-			{ popoverBooking ? (
-				<div
-					className="kf-cal-popover-backdrop"
-					role="presentation"
-					onClick={ () => setPopoverBooking( null ) }
-				>
+			{ popoverBooking && typeof document !== 'undefined'
+				? renderInBodyPortal(
 					<div
-						className="kf-cal-popover"
-						role="dialog"
-						aria-modal="true"
-						aria-label={ __( 'Booking details', 'kennelflow-core' ) }
-						onClick={ ( e ) => e.stopPropagation() }
+						className="kf-cal-popover-backdrop"
+						role="presentation"
+						onClick={ () => setPopoverBooking( null ) }
 					>
-						<div className="kf-cal-popover__header">
-							<h2 className="kf-cal-popover__title">
-								{ popoverBooking.pet_name
-									? popoverBooking.pet_name
-									: __( 'Booking', 'kennelflow-core' ) }
-							</h2>
-							<button
-								type="button"
-								className="kf-cal-popover__close"
-								onClick={ () => setPopoverBooking( null ) }
-								aria-label={ __( 'Close', 'kennelflow-core' ) }
-							>
-								×
-							</button>
+						<div
+							className="kf-cal-popover"
+							role="dialog"
+							aria-modal="true"
+							aria-label={ __( 'Booking details', 'kennelflow-core' ) }
+							onClick={ ( e ) => e.stopPropagation() }
+						>
+							<div className="kf-cal-popover__header">
+								<h2 className="kf-cal-popover__title">
+									{ popoverBooking.pet_name
+										? popoverBooking.pet_name
+										: __( 'Booking', 'kennelflow-core' ) }
+								</h2>
+								<button
+									type="button"
+									className="kf-cal-popover__close"
+									onClick={ () => setPopoverBooking( null ) }
+									aria-label={ __( 'Close', 'kennelflow-core' ) }
+								>
+									×
+								</button>
+							</div>
+							<div className="kf-cal-popover__body">
+								<p className="kf-cal-popover__line">
+									<strong>{ __( 'Owner', 'kennelflow-core' ) }</strong>{ ' ' }
+									{ popoverBooking.owner_name &&
+									String( popoverBooking.owner_name ).trim() !== ''
+										? popoverBooking.owner_name
+										: '—' }
+								</p>
+								<p className="kf-cal-popover__line">
+									<strong>{ __( 'Kennel / resource', 'kennelflow-core' ) }</strong>{ ' ' }
+									{ popoverResourceTitle && popoverResourceTitle.trim() !== ''
+										? popoverResourceTitle
+										: sprintf(
+												/* translators: %d: numeric resource id */
+												__( 'Resource %d', 'kennelflow-core' ),
+												parseInt( popoverBooking.resource_id, 10 ) || 0
+										  ) }
+								</p>
+								<p className="kf-cal-popover__line">
+									<strong>{ __( 'Stay', 'kennelflow-core' ) }</strong>
+									<br />
+									{ formatPopoverDateTime( popoverBooking.start_gmt ) }
+									{ ' → ' }
+									{ formatPopoverDateTime( popoverBooking.end_gmt ) }
+								</p>
+								<p className="kf-cal-popover__line">
+									<strong>{ __( 'Status', 'kennelflow-core' ) }</strong>{ ' ' }
+									{ popoverBooking.status &&
+									String( popoverBooking.status ).trim() !== ''
+										? popoverBooking.status
+										: '—' }
+								</p>
+								<BookingRecordLinks links={ popoverBooking.record_links } />
+								{ showSessionPhotos ? (
+									<BookingSessionPhotos
+										booking={ popoverBooking }
+										photoSettings={ sessionPhotoSettings }
+									/>
+								) : null }
+								{ popoverCanCheckIn ||
+								isBoardingBooking( popoverBooking ) ? (
+									<div className="kf-cal-popover__actions">
+										{ popoverCanCheckIn ? (
+											<>
+												<button
+													type="button"
+													className="button button-primary"
+													disabled={ checkInBusy }
+													onClick={ handleCheckIn }
+												>
+													{ checkInBusy
+														? __( 'Checking in…', 'kennelflow-core' )
+														: __( 'Check in', 'kennelflow-core' ) }
+												</button>
+												{ checkInError ? (
+													<p className="kf-cal-popover__hint kf-cal-popover__hint--error">
+														{ checkInError }
+													</p>
+												) : null }
+											</>
+										) : null }
+										{ isBoardingBooking( popoverBooking ) ? (
+											runCardPrintReady ? (
+												<button
+													type="button"
+													className="button button-primary"
+													onClick={ openRunCardPrint }
+												>
+													{ __( 'Print run card', 'kennelflow-core' ) }
+												</button>
+											) : (
+												<p className="kf-cal-popover__hint">
+													{ parseInt( popoverBooking.booking_post_id, 10 ) < 1
+														? __(
+																'Run card needs a Kennel Press booking record linked to this stay.',
+																'kennelflow-core'
+														  )
+														: __(
+																'Print run card is unavailable (Kennel Press not loaded or permissions).',
+																'kennelflow-core'
+														  ) }
+												</p>
+											)
+										) : null }
+									</div>
+								) : null }
+							</div>
 						</div>
-						<div className="kf-cal-popover__body">
-							<p className="kf-cal-popover__line">
-								<strong>{ __( 'Owner', 'kennelflow-core' ) }</strong>{ ' ' }
-								{ popoverBooking.owner_name &&
-								String( popoverBooking.owner_name ).trim() !== ''
-									? popoverBooking.owner_name
-									: '—' }
-							</p>
-							<p className="kf-cal-popover__line">
-								<strong>{ __( 'Kennel / resource', 'kennelflow-core' ) }</strong>{ ' ' }
-								{ popoverResourceTitle && popoverResourceTitle.trim() !== ''
-									? popoverResourceTitle
-									: sprintf(
-											/* translators: %d: numeric resource id */
-											__( 'Resource %d', 'kennelflow-core' ),
-											parseInt( popoverBooking.resource_id, 10 ) || 0
-									  ) }
-							</p>
-							<p className="kf-cal-popover__line">
-								<strong>{ __( 'Stay', 'kennelflow-core' ) }</strong>
-								<br />
-								{ formatPopoverDateTime( popoverBooking.start_gmt ) }
-								{ ' → ' }
-								{ formatPopoverDateTime( popoverBooking.end_gmt ) }
-							</p>
-							{ isBoardingBooking( popoverBooking ) ? (
-								<div className="kf-cal-popover__actions">
-									{ runCardPrintReady ? (
-										<button
-											type="button"
-											className="button button-primary"
-											onClick={ openRunCardPrint }
-										>
-											{ __( 'Print run card', 'kennelflow-core' ) }
-										</button>
-									) : (
-										<p className="kf-cal-popover__hint">
-											{ parseInt( popoverBooking.booking_post_id, 10 ) < 1
-												? __(
-														'Run card needs a Kennel Press booking record linked to this stay.',
-														'kennelflow-core'
-												  )
-												: __(
-														'Print run card is unavailable (Kennel Press not loaded or permissions).',
-														'kennelflow-core'
-												  ) }
-										</p>
-									) }
-								</div>
-							) : null }
-						</div>
-					</div>
-				</div>
-			) : null }
+					</div>,
+					document.body
+				  )
+				: null }
+
+			<BookingModal
+				open={ bookingModalOpen }
+				mode={ bookingModalMode }
+				onClose={ () => {
+					setDebugAction( 'Modal close requested' );
+					setBookingModalOpen( false );
+					setBookingModalMode( 'booking' );
+				} }
+				onError={ ( err ) => {
+					if ( err instanceof Error ) {
+						setLastError( err );
+					}
+				} }
+				weekRange={ range }
+				defaultBookingKind={ kindTrim }
+			/>
+
+			<CalendarDebugPanel
+				bookingModalOpen={ bookingModalOpen }
+				debugAction={ debugAction }
+				settings={ calendarSettings }
+				onForceOpenModal={ handleForceOpenModal }
+				lastError={ lastError }
+			/>
 		</div>
 	);
 }

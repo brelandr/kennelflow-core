@@ -24,6 +24,22 @@ class AdminHub {
 	}
 
 	/**
+	 * Capability required to see the KennelFlow top-level menu and Hub home.
+	 *
+	 * @return string
+	 */
+	public static function required_cap() {
+		/**
+		 * Minimum capability for the KennelFlow Hub admin menu (default: staff who can edit content).
+		 *
+		 * @since 0.3.1
+		 *
+		 * @param string $cap Capability slug.
+		 */
+		return (string) apply_filters( 'ltkf_hub_menu_capability', 'edit_posts' );
+	}
+
+	/**
 	 * Register top-level Hub before CPT submenus attach.
 	 *
 	 * @return void
@@ -32,7 +48,7 @@ class AdminHub {
 		add_menu_page(
 			__( 'KennelFlow Hub', 'kennelflow-core' ),
 			__( 'KennelFlow', 'kennelflow-core' ),
-			'manage_options',
+			self::required_cap(),
 			ltkf_get_hub_menu_slug(),
 			array( __CLASS__, 'render_page' ),
 			'dashicons-pets',
@@ -46,7 +62,8 @@ class AdminHub {
 	 * @return void
 	 */
 	public static function render_page() {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		$hub_cap = self::required_cap();
+		if ( ! current_user_can( $hub_cap ) && ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'You do not have permission to access this page.', 'kennelflow-core' ) );
 		}
 
@@ -54,11 +71,20 @@ class AdminHub {
 		$loc_pt = function_exists( 'ltkf_get_location_post_type' ) ? ltkf_get_location_post_type() : 'kf_location';
 
 		$sections = self::get_dashboard_sections( $pet_pt, $loc_pt );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			$sections = self::filter_staff_dashboard_sections( $sections );
+		}
 		?>
 		<div class="wrap kf-hub-wrap">
 			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
 			<p class="description">
-				<?php esc_html_e( 'Quick links to Hub tools. The same screens are available from the KennelFlow menu in the left sidebar.', 'kennelflow-core' ); ?>
+				<?php
+				if ( current_user_can( 'manage_options' ) ) {
+					esc_html_e( 'Quick links to Hub tools. The same screens are available from the KennelFlow menu in the left sidebar.', 'kennelflow-core' );
+				} else {
+					esc_html_e( 'Quick links for daily front-desk work — pets, bookings, and calendars.', 'kennelflow-core' );
+				}
+				?>
 			</p>
 
 			<style>
@@ -263,5 +289,60 @@ class AdminHub {
 		 * @param string  $loc_pt  Location post type.
 		 */
 		return apply_filters( 'ltkf_hub_dashboard_sections', $sections, $pet_pt, $loc_pt );
+	}
+
+	/**
+	 * Hide admin-only Hub links for front-desk staff (no manage_options).
+	 *
+	 * @param array<int, array{title: string, items: array<int, array{url: string, label: string, icon?: string}>}> $sections Sections.
+	 * @return array<int, array{title: string, items: array<int, array{url: string, label: string, icon?: string}>}>
+	 */
+	private static function filter_staff_dashboard_sections( $sections ) {
+		$admin_only_paths = array(
+			'kf-staff-permissions',
+			'kf-pending-records',
+			'kf-daily-reports',
+			'kf-kennelflow-settings',
+			'kf-revenue',
+			'kf-webhooks-api',
+			'kf-data-vault',
+			'kf-client-migration',
+			'kf-compliance',
+			'kf-compliance-rules',
+			'kf-health',
+			'kf-documentation',
+			'kf-demo-data-sandbox',
+		);
+
+		$out = array();
+		foreach ( (array) $sections as $section ) {
+			if ( empty( $section['items'] ) || ! is_array( $section['items'] ) ) {
+				continue;
+			}
+			$items = array();
+			foreach ( $section['items'] as $item ) {
+				if ( empty( $item['url'] ) ) {
+					continue;
+				}
+				$skip = false;
+				foreach ( $admin_only_paths as $path ) {
+					if ( false !== strpos( (string) $item['url'], $path ) ) {
+						$skip = true;
+						break;
+					}
+				}
+				if ( $skip ) {
+					continue;
+				}
+				$items[] = $item;
+			}
+			if ( empty( $items ) ) {
+				continue;
+			}
+			$section['items'] = $items;
+			$out[]            = $section;
+		}
+
+		return $out;
 	}
 }

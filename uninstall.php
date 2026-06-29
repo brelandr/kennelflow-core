@@ -44,3 +44,15 @@ if ( is_multisite() ) {
 } else {
 	$ltkf_delete_options_for_site();
 }
+
+// Drop custom tables on uninstall.
+// ltkf_commissions is owned by KennelFlow Groom; kennelflow_vet_audit_log by KennelFlow Vet.
+// Core only drops the tables it owns.
+$kennelflow_core_tables = array(
+	$wpdb->prefix . 'kf_bookings',
+	$wpdb->prefix . 'kf_medical_records',
+	$wpdb->prefix . 'kf_waitlist',
+);
+foreach ( $kennelflow_core_tables as $kennelflow_core_table ) {
+	$wpdb->query( "DROP TABLE IF EXISTS `" . esc_sql( $kennelflow_core_table ) . "`" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table names are internal constants, not user input.
+}

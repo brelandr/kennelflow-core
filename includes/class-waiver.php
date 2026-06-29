@@ -9,6 +9,8 @@ namespace Landtech\KennelFlow\Core;
 
 defined( 'ABSPATH' ) || exit;
 
+require_once LTKF_PLUGIN_DIR . 'includes/class-waiver-storage.php';
+
 /**
  * Class Waiver
  */

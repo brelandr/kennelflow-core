@@ -121,7 +121,7 @@ class AdminReportCard {
 						return;
 					}
 					printf(
-						'<div class="notice notice-error"><p>%s</p></div>',
+						'<div class="notice notice-error is-dismissible"><p>%s</p></div>',
 						esc_html__( 'KennelFlow Daily Reports is missing the compiled bundle. From the kennelflow-core plugin folder, run: npm install && npm run build (then upload the build/ folder: report-card.js, report-card.css, report-card.asset.php).', 'kennelflow-core' )
 					);
 				}

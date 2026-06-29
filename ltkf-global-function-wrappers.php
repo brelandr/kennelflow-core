@@ -55,6 +55,28 @@ if ( ! function_exists( 'ltkf_get_pet_owner_user_id' ) ) {
 	}
 }
 
+if ( ! function_exists( 'ltkf_get_pet_owner_display_name' ) ) {
+	function ltkf_get_pet_owner_display_name( $pet_id ) {
+		return \Landtech\KennelFlow\Core\ltkf_get_pet_owner_display_name( $pet_id );
+	}
+}
+
+if ( ! function_exists( 'ltkf_get_pet_select_label' ) ) {
+	function ltkf_get_pet_select_label( $pet_id, $pet_title = '' ) {
+		return \Landtech\KennelFlow\Core\ltkf_get_pet_select_label( $pet_id, $pet_title );
+	}
+}
+
+if ( ! function_exists( 'ltkf_get_calendar_booking_record_links' ) ) {
+	/**
+	 * @param array<string, mixed> $booking Calendar booking row.
+	 * @return array<string, mixed>
+	 */
+	function ltkf_get_calendar_booking_record_links( $booking ) {
+		return \Landtech\KennelFlow\Core\ltkf_get_calendar_booking_record_links( $booking );
+	}
+}
+
 if ( ! function_exists( 'ltkf_get_user_phone_for_sms' ) ) {
 	function ltkf_get_user_phone_for_sms( $user_id ) {
 		return \Landtech\KennelFlow\Core\ltkf_get_user_phone_for_sms( $user_id );
@@ -217,6 +239,12 @@ if ( ! function_exists( 'ltkf_get_portal_dashboard_url' ) ) {
 	}
 }
 
+if ( ! function_exists( 'ltkf_get_public_booking_page_url' ) ) {
+	function ltkf_get_public_booking_page_url() {
+		return \Landtech\KennelFlow\Core\ltkf_get_public_booking_page_url();
+	}
+}
+
 if ( ! function_exists( 'ltkf_get_required_vaccines' ) ) {
 	function ltkf_get_required_vaccines() {
 		return \Landtech\KennelFlow\Core\ltkf_get_required_vaccines();
@@ -271,9 +299,51 @@ if ( ! function_exists( 'ltkf_get_boarding_wizard_pet_compliance_vaccines' ) ) {
 	}
 }
 
+if ( ! function_exists( 'ltkf_pet_has_pending_compliance_upload_for_labels' ) ) {
+	function ltkf_pet_has_pending_compliance_upload_for_labels( $pet_id, array $required_labels ) {
+		return \Landtech\KennelFlow\Core\ltkf_pet_has_pending_compliance_upload_for_labels( $pet_id, $required_labels );
+	}
+}
+
+if ( ! function_exists( 'ltkf_pet_requires_vaccine_compliance_for_labels' ) ) {
+	function ltkf_pet_requires_vaccine_compliance_for_labels( $pet_id, array $required_labels ) {
+		return \Landtech\KennelFlow\Core\ltkf_pet_requires_vaccine_compliance_for_labels( $pet_id, $required_labels );
+	}
+}
+
+if ( ! function_exists( 'ltkf_pet_requires_boarding_compliance_action' ) ) {
+	function ltkf_pet_requires_boarding_compliance_action( $pet_id ) {
+		return \Landtech\KennelFlow\Core\ltkf_pet_requires_boarding_compliance_action( $pet_id );
+	}
+}
+
 if ( ! function_exists( 'ltkf_pet_requires_compliance_action' ) ) {
 	function ltkf_pet_requires_compliance_action( $pet_id ) {
 		return \Landtech\KennelFlow\Core\ltkf_pet_requires_compliance_action( $pet_id );
+	}
+}
+
+if ( ! function_exists( 'ltkf_get_pet_owner_compliance_action_messages' ) ) {
+	function ltkf_get_pet_owner_compliance_action_messages( $pet_id ) {
+		return \Landtech\KennelFlow\Core\ltkf_get_pet_owner_compliance_action_messages( $pet_id );
+	}
+}
+
+if ( ! function_exists( 'ltkf_is_owner_online_boarding_enabled' ) ) {
+	function ltkf_is_owner_online_boarding_enabled() {
+		return \Landtech\KennelFlow\Core\ltkf_is_owner_online_boarding_enabled();
+	}
+}
+
+if ( ! function_exists( 'ltkf_owner_may_request_online_boarding' ) ) {
+	function ltkf_owner_may_request_online_boarding( $pet_id, $user_id = 0 ) {
+		return \Landtech\KennelFlow\Core\ltkf_owner_may_request_online_boarding( $pet_id, $user_id );
+	}
+}
+
+if ( ! function_exists( 'ltkf_rest_guard_owner_online_boarding' ) ) {
+	function ltkf_rest_guard_owner_online_boarding( $pet_id, $user_id = 0 ) {
+		return \Landtech\KennelFlow\Core\ltkf_rest_guard_owner_online_boarding( $pet_id, $user_id );
 	}
 }
 
@@ -286,6 +356,36 @@ if ( ! function_exists( 'ltkf_booking_row_is_boarding_stay_for_vaccine_complianc
 if ( ! function_exists( 'ltkf_compliance_gatekeeper_e2e_allow_noncompliant_checkout' ) ) {
 	function ltkf_compliance_gatekeeper_e2e_allow_noncompliant_checkout() {
 		return \Landtech\KennelFlow\Core\ltkf_compliance_gatekeeper_e2e_allow_noncompliant_checkout();
+	}
+}
+
+if ( ! function_exists( 'ltkf_hub_calendar_bundle_readable' ) ) {
+	function ltkf_hub_calendar_bundle_readable() {
+		return \Landtech\KennelFlow\Core\ltkf_hub_calendar_bundle_readable();
+	}
+}
+
+if ( ! function_exists( 'ltkf_enqueue_hub_calendar_bundle' ) ) {
+	function ltkf_enqueue_hub_calendar_bundle( $script_handle ) {
+		return \Landtech\KennelFlow\Core\ltkf_enqueue_hub_calendar_bundle( $script_handle );
+	}
+}
+
+if ( ! function_exists( 'ltkf_get_hub_calendar_shell_markup' ) ) {
+	function ltkf_get_hub_calendar_shell_markup( $args = array() ) {
+		return \Landtech\KennelFlow\Core\ltkf_get_hub_calendar_shell_markup( $args );
+	}
+}
+
+if ( ! function_exists( 'ltkf_calendar_debug_enabled' ) ) {
+	function ltkf_calendar_debug_enabled() {
+		return \Landtech\KennelFlow\Core\ltkf_calendar_debug_enabled();
+	}
+}
+
+if ( ! function_exists( 'ltkf_get_calendar_add_booking_diagnostics' ) ) {
+	function ltkf_get_calendar_add_booking_diagnostics( $localized = array() ) {
+		return \Landtech\KennelFlow\Core\ltkf_get_calendar_add_booking_diagnostics( $localized );
 	}
 }
 

@@ -240,30 +240,38 @@ class BookingComplianceGate {
 			return array();
 		}
 
-		$status = ltkf_get_pet_compliance_status( $pet_id );
-		if ( is_wp_error( $status ) ) {
-			$name = get_the_title( $pet_id );
-			if ( '' === $name ) {
-				$name = '#' . (string) $pet_id;
-			}
-
-			return array(
-				sprintf(
-					/* translators: %s: pet name or id */
-					__( 'Checkout halted: we could not verify vaccination compliance for %s. Please contact the facility.', 'kennelflow-core' ),
-					esc_html( $name )
-				),
-			);
-		}
-
-		$vaccines = isset( $status['vaccines'] ) && is_array( $status['vaccines'] ) ? $status['vaccines'] : array();
-
 		$name = get_the_title( $pet_id );
 		if ( '' === $name ) {
 			$name = '#' . (string) $pet_id;
 		}
 
 		$out = array();
+
+		if ( class_exists( Waiver::class ) && ! Waiver::pet_has_valid_waiver( $pet_id ) ) {
+			$out[] = sprintf(
+				/* translators: %s: pet name or id */
+				__( 'Checkout halted: %s needs a signed boarding waiver before payment.', 'kennelflow-core' ),
+				esc_html( $name )
+			);
+		}
+
+		$labels = ltkf_get_effective_boarding_required_vaccines();
+		if ( empty( $labels ) ) {
+			return $out;
+		}
+
+		$status = ltkf_get_pet_compliance_status( $pet_id, $labels );
+		if ( is_wp_error( $status ) ) {
+			$out[] = sprintf(
+				/* translators: %s: pet name or id */
+				__( 'Checkout halted: we could not verify vaccination compliance for %s. Please contact the facility.', 'kennelflow-core' ),
+				esc_html( $name )
+			);
+
+			return $out;
+		}
+
+		$vaccines = isset( $status['vaccines'] ) && is_array( $status['vaccines'] ) ? $status['vaccines'] : array();
 
 		foreach ( $vaccines as $label => $row ) {
 			if ( ! is_array( $row ) ) {

@@ -23,6 +23,7 @@ class FrontendHubCalendar {
 	 */
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'register_shortcode' ) );
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'maybe_enqueue_for_shortcode_page' ), 20 );
 	}
 
 	/**
@@ -45,6 +46,61 @@ class FrontendHubCalendar {
 	}
 
 	/**
+	 * Pre-enqueue on singular pages that contain `[ltkf_hub_calendar]` (before shortcode render).
+	 *
+	 * @return void
+	 */
+	public static function maybe_enqueue_for_shortcode_page() {
+		if ( is_admin() || ! is_singular() ) {
+			return;
+		}
+
+		$post = get_post();
+		if ( ! $post instanceof \WP_Post ) {
+			return;
+		}
+
+		if ( ! self::page_has_hub_calendar_shortcode( $post ) ) {
+			return;
+		}
+
+		if ( ! ltkf_user_can_view_hub_calendar() ) {
+			return;
+		}
+
+		self::enqueue_assets();
+	}
+
+	/**
+	 * Whether page content includes a Hub calendar shortcode (including spoke aliases).
+	 *
+	 * @param \WP_Post $post Post object.
+	 * @return bool
+	 */
+	protected static function page_has_hub_calendar_shortcode( $post ) {
+		if ( ! $post instanceof \WP_Post ) {
+			return false;
+		}
+
+		$shortcode_tags = apply_filters(
+			'ltkf_hub_calendar_shortcode_tags',
+			array( 'ltkf_hub_calendar' )
+		);
+		if ( ! is_array( $shortcode_tags ) ) {
+			$shortcode_tags = array( 'ltkf_hub_calendar' );
+		}
+
+		foreach ( $shortcode_tags as $tag ) {
+			$tag = sanitize_key( (string) $tag );
+			if ( '' !== $tag && has_shortcode( $post->post_content, $tag ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * Enqueue Hub calendar bundle when shortcode renders.
 	 *
 	 * @return void
@@ -56,52 +112,35 @@ class FrontendHubCalendar {
 		}
 		$done = true;
 
-		$asset_file = LTKF_PLUGIN_DIR . 'build/index.asset.php';
-		$asset      = array(
-			'dependencies' => array(),
-			'version'      => LTKF_CORE_VERSION,
-		);
-		if ( is_readable( $asset_file ) ) {
-			$loaded = require $asset_file;
-			if ( is_array( $loaded ) ) {
-				$asset = array_merge( $asset, $loaded );
-			}
-		}
-
-		wp_enqueue_script(
-			self::SCRIPT_HANDLE,
-			LTKF_PLUGIN_URL . 'build/index.js',
-			$asset['dependencies'],
-			$asset['version'],
-			true
-		);
-
-		wp_localize_script(
-			self::SCRIPT_HANDLE,
-			'kfCalendarSettings',
-			ltkf_get_calendar_localized_settings()
-		);
-
-		wp_set_script_translations( self::SCRIPT_HANDLE, 'kennelflow-core', LTKF_PLUGIN_DIR . 'languages' );
-
-		wp_enqueue_style(
-			self::SCRIPT_HANDLE,
-			LTKF_PLUGIN_URL . 'build/index.css',
-			array(),
-			$asset['version']
-		);
+		ltkf_enqueue_hub_calendar_bundle( self::SCRIPT_HANDLE );
 	}
 
 	/**
 	 * Shortcode output: Hub calendar root (same id as wp-admin for `build/index.js`).
 	 *
-	 * @param string[] $atts Attributes.
+	 * @param string[]|string $atts Attributes.
 	 * @return string
 	 */
 	public static function render_shortcode( $atts ) {
-		unset( $atts );
+		$atts = shortcode_atts(
+			array(
+				'booking_kind' => '',
+				'corner_label' => '',
+			),
+			is_array( $atts ) ? $atts : array(),
+			'ltkf_hub_calendar'
+		);
 
-		if ( ! current_user_can( self::required_cap() ) ) {
+		/**
+		 * Shortcode attributes for `[ltkf_hub_calendar]` (e.g. booking_kind=grooming).
+		 *
+		 * @since 0.3.2
+		 *
+		 * @param array<string, string> $atts Attributes.
+		 */
+		$atts = apply_filters( 'ltkf_hub_calendar_shortcode_atts', $atts );
+
+		if ( ! ltkf_user_can_view_hub_calendar() ) {
 			if ( is_user_logged_in() ) {
 				return '<p class="kf-hub-calendar-denied">' . esc_html__(
 					'You do not have permission to view the booking calendar.',
@@ -126,10 +165,20 @@ class FrontendHubCalendar {
 
 		list( $start_date, $end_date ) = AdminCalendar::get_shell_week_range_utc();
 
-		return sprintf(
-			'<div id="kf-admin-calendar-root" class="kf-admin-calendar-root kf-hub-calendar-root" data-start-date="%s" data-end-date="%s" aria-live="polite"></div>',
-			esc_attr( $start_date ),
-			esc_attr( $end_date )
+		$booking_kind = sanitize_key( (string) $atts['booking_kind'] );
+		$corner_label = sanitize_text_field( (string) $atts['corner_label'] );
+
+		$class = 'kf-admin-calendar-root kf-hub-calendar-root';
+
+		return ltkf_get_hub_calendar_shell_markup(
+			array(
+				'id'           => 'kf-admin-calendar-root',
+				'class'        => $class,
+				'start_date'   => $start_date,
+				'end_date'     => $end_date,
+				'booking_kind' => $booking_kind,
+				'corner_label' => $corner_label,
+			)
 		);
 	}
 }

@@ -44,6 +44,7 @@ class OwnerPets {
 		add_action( 'save_post_' . ltkf_get_pet_post_type(), array( __CLASS__, 'capture_old_owner' ), 5, 3 );
 		add_action( 'save_post_' . ltkf_get_pet_post_type(), array( __CLASS__, 'sync_after_save' ), 99, 3 );
 		add_action( 'before_delete_post', array( __CLASS__, 'before_delete_pet' ), 10, 1 );
+		add_action( 'rest_api_init', array( __CLASS__, 'register_rest_fields' ) );
 
 		/**
 		 * Fires after KennelFlow Core registers owner↔pet sync hooks.
@@ -51,6 +52,32 @@ class OwnerPets {
 		 * @since 0.1.0
 		 */
 		do_action( 'ltkf_owner_pets_init' );
+	}
+
+	/**
+	 * Expose owner display name on kf_pet REST responses for staff booking UI.
+	 *
+	 * @return void
+	 */
+	public static function register_rest_fields() {
+		register_rest_field(
+			ltkf_get_pet_post_type(),
+			'owner_name',
+			array(
+				'get_callback' => static function ( $post ) {
+					if ( ! is_array( $post ) || empty( $post['id'] ) ) {
+						return '';
+					}
+					return ltkf_get_pet_owner_display_name( (int) $post['id'] );
+				},
+				'schema'       => array(
+					'description' => __( 'Pet owner display name.', 'kennelflow-core' ),
+					'type'        => 'string',
+					'context'     => array( 'view', 'edit' ),
+					'readonly'    => true,
+				),
+			)
+		);
 	}
 
 	/**

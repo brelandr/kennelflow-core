@@ -626,7 +626,7 @@ class MigrationAdmin {
 			</p>
 
 			<?php if ( '' !== $err && isset( $messages[ $err ] ) ) : ?>
-				<div class="notice notice-error"><p><?php echo esc_html( $messages[ $err ] ); ?></p></div>
+				<div class="notice notice-error is-dismissible"><p><?php echo esc_html( $messages[ $err ] ); ?></p></div>
 			<?php endif; ?>
 
 			<?php if ( '' === $job_id ) : ?>

@@ -121,26 +121,47 @@ class Portal {
 
 		$waitlist_vars = array();
 		if ( post_type_exists( 'kennelpress_booking' ) && ltkf_table_exists( ltkf_waitlist_table_name() ) ) {
+			$online_boarding = ltkf_is_owner_online_boarding_enabled();
+			$booking_url     = $online_boarding ? ltkf_get_public_booking_page_url() : '';
+			$eligible_pets   = array();
+			if ( $online_boarding ) {
+				foreach ( $pet_ids as $pid ) {
+					$pid = absint( $pid );
+					if ( $pid < 1 ) {
+						continue;
+					}
+					if ( ltkf_owner_may_request_online_boarding( $pid, $user_id ) ) {
+						$eligible_pets[] = $pid;
+					}
+				}
+			}
+
 			$waitlist_vars = array(
-				'nonce'    => wp_create_nonce( 'ltkf_waitlist_join' ),
-				'action'   => 'ltkf_waitlist_join',
-				'restBase' => esc_url_raw( rest_url( 'kennelflow-boarding/v1/' ) ),
-				'strings'  => array(
-					'check'     => __( 'Check availability', 'kennelflow-core' ),
-					'join'      => __( 'Join waitlist', 'kennelflow-core' ),
-					'checking'  => __( 'Checking…', 'kennelflow-core' ),
-					'joining'   => __( 'Joining…', 'kennelflow-core' ),
-					'full'      => __( 'No kennels are available for those dates. You can join the waitlist to be notified if a spot opens.', 'kennelflow-core' ),
-					'available' => __( 'Kennels are available for those dates — book through your facility or staff.', 'kennelflow-core' ),
-					'joined'    => __( 'You are on the waitlist. We will email you if a spot opens.', 'kennelflow-core' ),
-					'duplicate' => __( 'You already have a waitlist request for these dates.', 'kennelflow-core' ),
-					'needDates' => __( 'Please choose a location, start, and end.', 'kennelflow-core' ),
-					'error'     => __( 'Something went wrong. Please try again.', 'kennelflow-core' ),
-					'network'   => __( 'Network error. Please try again.', 'kennelflow-core' ),
-					'selectPet' => __( 'Pet', 'kennelflow-core' ),
-					'selectLoc' => __( 'Location', 'kennelflow-core' ),
-					'start'     => __( 'Start (local)', 'kennelflow-core' ),
-					'end'       => __( 'End (local)', 'kennelflow-core' ),
+				'nonce'                 => wp_create_nonce( 'ltkf_waitlist_join' ),
+				'action'                => 'ltkf_waitlist_join',
+				'restBase'              => esc_url_raw( rest_url( 'kennelflow-boarding/v1/' ) ),
+				'onlineBoardingEnabled' => $online_boarding,
+				'bookingPageUrl'        => esc_url_raw( $booking_url ),
+				'eligiblePetIds'        => $eligible_pets,
+				'strings'               => array(
+					'check'                  => __( 'Check availability', 'kennelflow-core' ),
+					'join'                   => __( 'Join waitlist', 'kennelflow-core' ),
+					'checking'               => __( 'Checking…', 'kennelflow-core' ),
+					'joining'                => __( 'Joining…', 'kennelflow-core' ),
+					'full'                   => __( 'No kennels are available for those dates. You can join the waitlist to be notified if a spot opens.', 'kennelflow-core' ),
+					'available'              => __( 'Kennels are available for those dates — book through your facility or staff.', 'kennelflow-core' ),
+					'availableOnline'        => __( 'Kennels are available for those dates. You can book boarding online now.', 'kennelflow-core' ),
+					'availableNeedCompliance' => __( 'Kennels are available, but this pet still needs waiver or vaccination records before booking online.', 'kennelflow-core' ),
+					'bookOnline'             => __( 'Book boarding online', 'kennelflow-core' ),
+					'joined'                 => __( 'You are on the waitlist. We will email you if a spot opens.', 'kennelflow-core' ),
+					'duplicate'              => __( 'You already have a waitlist request for these dates.', 'kennelflow-core' ),
+					'needDates'              => __( 'Please choose a location, start, and end.', 'kennelflow-core' ),
+					'error'                  => __( 'Something went wrong. Please try again.', 'kennelflow-core' ),
+					'network'                => __( 'Network error. Please try again.', 'kennelflow-core' ),
+					'selectPet'              => __( 'Pet', 'kennelflow-core' ),
+					'selectLoc'              => __( 'Location', 'kennelflow-core' ),
+					'start'                  => __( 'Start (local)', 'kennelflow-core' ),
+					'end'                    => __( 'End (local)', 'kennelflow-core' ),
 				),
 			);
 		}
@@ -187,6 +208,24 @@ class Portal {
 					'network'       => __( 'Network error. Please try again.', 'kennelflow-core' ),
 					'fileTooLarge'  => __( 'File must be 5 MB or smaller.', 'kennelflow-core' ),
 					'fileType'      => __( 'Please choose a PDF, PNG, or JPEG file.', 'kennelflow-core' ),
+				),
+			),
+			'addPet'           => array(
+				'enabled'   => (bool) apply_filters( 'ltkf_allow_owner_create_pet', true, $user_id ),
+				'restUrl'   => esc_url_raw( rest_url( 'kennelflow/v1/me/pets' ) ),
+				'restNonce' => wp_create_nonce( 'wp_rest' ),
+				'maxLength' => OwnerPetsRestApi::MAX_TITLE_LENGTH,
+				'strings'   => array(
+					'heading'   => __( 'Add a pet', 'kennelflow-core' ),
+					'hint'      => __( 'Enter your pet’s name to link them to your account. You can upload vaccination records and sign waivers after adding a pet.', 'kennelflow-core' ),
+					'label'     => __( 'Pet name', 'kennelflow-core' ),
+					'placeholder' => __( 'e.g. Bailey', 'kennelflow-core' ),
+					'submit'    => __( 'Add pet', 'kennelflow-core' ),
+					'saving'    => __( 'Adding…', 'kennelflow-core' ),
+					'needName'  => __( 'Please enter a pet name.', 'kennelflow-core' ),
+					'saved'     => __( 'Pet added. Refreshing…', 'kennelflow-core' ),
+					'error'     => __( 'Could not add pet. Please try again.', 'kennelflow-core' ),
+					'network'   => __( 'Network error. Please try again.', 'kennelflow-core' ),
 				),
 			),
 		);
@@ -241,7 +280,7 @@ class Portal {
 			wp_send_json_error( array( 'message' => __( 'This booking is not awaiting payment.', 'kennelflow-core' ) ), 400 );
 		}
 
-		if ( ! ltkf_compliance_gatekeeper_e2e_allow_noncompliant_checkout() && ltkf_booking_row_is_boarding_stay_for_vaccine_compliance( $row ) && ltkf_pet_requires_compliance_action( (int) $row->pet_id ) ) {
+		if ( ! ltkf_compliance_gatekeeper_e2e_allow_noncompliant_checkout() && ltkf_booking_row_is_boarding_stay_for_vaccine_compliance( $row ) && ltkf_pet_requires_boarding_compliance_action( (int) $row->pet_id ) ) {
 			wp_send_json_error(
 				array(
 					'message' => __( 'Payment is blocked until required vaccinations are valid. Please complete records under Vaccinations & records or contact your facility.', 'kennelflow-core' ),
@@ -311,7 +350,7 @@ class Portal {
 			wp_send_json_error( array( 'message' => __( 'No remaining balance is due for this booking.', 'kennelflow-core' ) ), 400 );
 		}
 
-		if ( ! ltkf_compliance_gatekeeper_e2e_allow_noncompliant_checkout() && ltkf_booking_row_is_boarding_stay_for_vaccine_compliance( $row ) && ltkf_pet_requires_compliance_action( (int) $row->pet_id ) ) {
+		if ( ! ltkf_compliance_gatekeeper_e2e_allow_noncompliant_checkout() && ltkf_booking_row_is_boarding_stay_for_vaccine_compliance( $row ) && ltkf_pet_requires_boarding_compliance_action( (int) $row->pet_id ) ) {
 			wp_send_json_error(
 				array(
 					'message' => __( 'Payment is blocked until required vaccinations are valid. Please complete records under Vaccinations & records or contact your facility.', 'kennelflow-core' ),
@@ -434,6 +473,52 @@ class Portal {
 	}
 
 	/**
+	 * Whether the logged-in owner may add a pet from the portal.
+	 *
+	 * @param int $user_id WordPress user ID.
+	 * @return bool
+	 */
+	protected static function owner_may_add_pet( $user_id ) {
+		$user_id = absint( $user_id );
+		if ( $user_id < 1 ) {
+			return false;
+		}
+
+		if ( ! apply_filters( 'ltkf_allow_owner_create_pet', true, $user_id ) ) {
+			return false;
+		}
+
+		$pt = function_exists( 'ltkf_get_pet_post_type' ) ? ltkf_get_pet_post_type() : 'kf_pet';
+		return post_type_exists( $pt );
+	}
+
+	/**
+	 * Add-pet form (Boarding tab).
+	 *
+	 * @param int $user_id Current user ID.
+	 * @return void
+	 */
+	protected static function render_add_pet_form( $user_id ) {
+		if ( ! self::owner_may_add_pet( $user_id ) ) {
+			return;
+		}
+
+		echo '<div class="kf-portal__add-pet" data-kf-add-pet>';
+		echo '<h3 class="kf-portal__subheading">' . esc_html__( 'Add a pet', 'kennelflow-core' ) . '</h3>';
+		echo '<p class="kf-portal__hint">' . esc_html__( 'Enter your pet’s name to link them to your account. You can upload vaccination records and sign waivers after adding a pet.', 'kennelflow-core' ) . '</p>';
+		echo '<form class="kf-portal__add-pet-form" data-kf-add-pet-form novalidate>';
+		echo '<p class="kf-portal__add-pet-field">';
+		echo '<label for="kf-add-pet-name">' . esc_html__( 'Pet name', 'kennelflow-core' ) . '</label> ';
+		echo '<input type="text" id="kf-add-pet-name" class="kf-portal__add-pet-input" data-kf-add-pet-name maxlength="' . esc_attr( (string) OwnerPetsRestApi::MAX_TITLE_LENGTH ) . '" placeholder="' . esc_attr__( 'e.g. Bailey', 'kennelflow-core' ) . '" required autocomplete="off" />';
+		echo '</p>';
+		echo '<p class="kf-portal__add-pet-actions">';
+		echo '<button type="submit" class="button button-primary" data-kf-add-pet-submit>' . esc_html__( 'Add pet', 'kennelflow-core' ) . '</button>';
+		echo '</p>';
+		echo '<p class="kf-portal__add-pet-msg" data-kf-add-pet-msg aria-live="polite" hidden></p>';
+		echo '</form></div>';
+	}
+
+	/**
 	 * Compliance badges for each owned pet (Boarding tab).
 	 *
 	 * @param int[] $pet_ids Owned pet IDs.
@@ -445,6 +530,18 @@ class Portal {
 		}
 
 		echo '<h3 class="kf-portal__subheading">' . esc_html__( 'Your pets', 'kennelflow-core' ) . '</h3>';
+
+		$any_boarding_action = false;
+		foreach ( $pet_ids as $check_pid ) {
+			if ( ltkf_pet_requires_boarding_compliance_action( absint( $check_pid ) ) ) {
+				$any_boarding_action = true;
+				break;
+			}
+		}
+		if ( $any_boarding_action ) {
+			echo '<p class="kf-portal__hint">' . esc_html__( 'Upload vaccination records for each required vaccine below. Staff will review uploads before you can book boarding.', 'kennelflow-core' ) . '</p>';
+		}
+
 		echo '<ul class="kf-portal__pet-compliance">';
 		foreach ( $pet_ids as $pid ) {
 			$pid   = absint( $pid );
@@ -452,16 +549,20 @@ class Portal {
 			if ( '' === $title ) {
 				$title = '#' . (string) $pid;
 			}
-			$action_req  = ltkf_pet_requires_compliance_action( $pid );
+			$action_req  = ltkf_pet_requires_boarding_compliance_action( $pid );
+			$action_msgs = $action_req ? ltkf_get_pet_owner_compliance_action_messages( $pid ) : array();
 			$badge_class = $action_req ? 'kf-portal__badge kf-portal__badge--action' : 'kf-portal__badge kf-portal__badge--healthy';
 			$badge_text  = $action_req ? __( 'Action Required', 'kennelflow-core' ) : __( 'Healthy', 'kennelflow-core' );
 
 			echo '<li class="kf-portal__pet-compliance-item" data-kf-pet-id="' . esc_attr( (string) $pid ) . '">';
 			echo '<span class="kf-portal__pet-name">' . esc_html( $title ) . '</span> ';
 			echo '<span class="' . esc_attr( $badge_class ) . '">' . esc_html( $badge_text ) . '</span>';
+			if ( ! empty( $action_msgs ) ) {
+				echo '<span class="kf-portal__action-hint">' . esc_html( implode( ' · ', $action_msgs ) ) . '</span>';
+			}
 
-			if ( $action_req && class_exists( 'ComplianceRulesEngine' ) ) {
-				$vaccines = ltkf_get_portal_pet_compliance_vaccines( $pid );
+			if ( $action_req && class_exists( ComplianceRulesEngine::class ) ) {
+				$vaccines = ltkf_get_boarding_wizard_pet_compliance_vaccines( $pid );
 				$missing  = array();
 				$expired  = array();
 				foreach ( $vaccines as $vrow ) {
@@ -565,25 +666,33 @@ class Portal {
 		echo '<div class="kf-portal__waitlist" data-kf-waitlist>';
 
 		echo '<h3 class="kf-portal__subheading">' . esc_html__( 'Book a stay', 'kennelflow-core' ) . '</h3>';
-		echo '<p class="kf-portal__hint">' . esc_html__( 'Check if kennels are free for your dates. If the facility is full, you can join the waitlist.', 'kennelflow-core' ) . '</p>';
+		if ( ltkf_is_owner_online_boarding_enabled() ) {
+			echo '<p class="kf-portal__hint">' . esc_html__( 'Check if kennels are free for your dates. When available, book boarding online or join the waitlist if the facility is full.', 'kennelflow-core' ) . '</p>';
+		} else {
+			echo '<p class="kf-portal__hint">' . esc_html__( 'Check if kennels are free for your dates. If the facility is full, you can join the waitlist.', 'kennelflow-core' ) . '</p>';
+		}
 
 		echo '<div class="kf-portal__waitlist-fields">';
-		echo '<p><label for="kf-wl-pet">' . esc_html__( 'Pet', 'kennelflow-core' ) . '</label> ';
-		echo '<select id="kf-wl-pet" data-kf-wl-pet required>';
-		echo '<option value="">' . esc_html__( '— Select —', 'kennelflow-core' ) . '</option>';
+		echo '<fieldset class="kf-portal__waitlist-pets" data-kf-wl-pets>';
+		echo '<legend>' . esc_html__( 'Pets', 'kennelflow-core' ) . '</legend>';
+		echo '<p class="kf-portal__hint">' . esc_html__( 'Select one or more pets for this stay.', 'kennelflow-core' ) . '</p>';
 		foreach ( $pet_ids as $pid ) {
 			$pid          = absint( $pid );
-			$needs_action = ltkf_pet_requires_compliance_action( $pid );
+			$needs_action = ltkf_pet_requires_boarding_compliance_action( $pid );
 			$label        = get_the_title( $pid );
 			if ( '' === $label ) {
 				$label = '#' . (string) $pid;
 			}
 			if ( $needs_action ) {
-				$label .= ' — ' . __( 'Action Required', 'kennelflow-core' );
+				$action_msgs = ltkf_get_pet_owner_compliance_action_messages( $pid );
+				$label      .= ' — ' . ( ! empty( $action_msgs ) ? implode( '; ', $action_msgs ) : __( 'Action Required', 'kennelflow-core' ) );
 			}
-			echo '<option value="' . esc_attr( (string) $pid ) . '"' . ( $needs_action ? ' disabled="disabled"' : '' ) . '>' . esc_html( $label ) . '</option>';
+			echo '<label class="kf-portal__waitlist-pet-choice">';
+			echo '<input type="checkbox" data-kf-wl-pet-id="' . esc_attr( (string) $pid ) . '" value="' . esc_attr( (string) $pid ) . '"' . ( $needs_action ? ' disabled="disabled"' : '' ) . ' /> ';
+			echo esc_html( $label );
+			echo '</label>';
 		}
-		echo '</select></p>';
+		echo '</fieldset>';
 
 		echo '<p><label for="kf-wl-location">' . esc_html__( 'Location', 'kennelflow-core' ) . '</label> ';
 		echo '<select id="kf-wl-location" data-kf-wl-location required>';
@@ -604,6 +713,7 @@ class Portal {
 		echo '<input type="datetime-local" id="kf-wl-end" data-kf-wl-end required /></p>';
 
 		echo '<p><button type="button" class="button" data-kf-wl-check>' . esc_html__( 'Check availability', 'kennelflow-core' ) . '</button> ';
+		echo '<a href="#" class="button button-primary" data-kf-wl-book hidden>' . esc_html__( 'Book boarding online', 'kennelflow-core' ) . '</a> ';
 		echo '<button type="button" class="button button-primary" data-kf-wl-join hidden disabled>' . esc_html__( 'Join waitlist', 'kennelflow-core' ) . '</button></p>';
 		echo '<p class="kf-portal__waitlist-msg" data-kf-wl-msg aria-live="polite"></p>';
 		echo '</div></div>';
@@ -710,13 +820,26 @@ class Portal {
 	 * @return void
 	 */
 	protected static function render_bookings_panel( $bookings, $pet_ids, $show_pay_now = false, $user_id = 0 ) {
+		$user_id = absint( $user_id );
+
+		self::render_add_pet_form( $user_id );
+
 		if ( ! ltkf_table_exists( ltkf_bookings_table_name() ) ) {
+			if ( empty( $pet_ids ) && self::owner_may_add_pet( $user_id ) ) {
+				echo '<p class="kf-portal__empty">' . esc_html__( 'No pets are linked to your account yet. Add your first pet above to get started.', 'kennelflow-core' ) . '</p>';
+			} elseif ( empty( $pet_ids ) ) {
+				echo '<p class="kf-portal__empty">' . esc_html__( 'No pets are linked to your account yet.', 'kennelflow-core' ) . '</p>';
+			}
 			echo '<p class="kf-portal__empty">' . esc_html__( 'Boarding reservations are not available on this site yet.', 'kennelflow-core' ) . '</p>';
 			return;
 		}
 
 		if ( empty( $pet_ids ) ) {
-			echo '<p class="kf-portal__empty">' . esc_html__( 'No pets are linked to your account yet.', 'kennelflow-core' ) . '</p>';
+			if ( self::owner_may_add_pet( $user_id ) ) {
+				echo '<p class="kf-portal__empty">' . esc_html__( 'No pets are linked to your account yet. Add your first pet above to get started.', 'kennelflow-core' ) . '</p>';
+			} else {
+				echo '<p class="kf-portal__empty">' . esc_html__( 'No pets are linked to your account yet.', 'kennelflow-core' ) . '</p>';
+			}
 			return;
 		}
 
@@ -739,8 +862,6 @@ class Portal {
 			echo '<th>' . esc_html__( 'Actions', 'kennelflow-core' ) . '</th>';
 		}
 		echo '</tr></thead><tbody>';
-
-		$user_id = absint( $user_id );
 
 		$confirmed_ids = array();
 		foreach ( $bookings as $b ) {
@@ -779,24 +900,32 @@ class Portal {
 			if ( $show_pay_now ) {
 				echo '<td>';
 				$pet_id_for_row = isset( $b->pet_id ) ? absint( $b->pet_id ) : 0;
-				$pay_blocked    = $pet_id_for_row > 0 && ltkf_pet_requires_compliance_action( $pet_id_for_row );
+				$pay_blocked    = $pet_id_for_row > 0 && ltkf_pet_requires_boarding_compliance_action( $pet_id_for_row );
+				$pay_hint       = '';
+				if ( $pay_blocked ) {
+					$action_msgs = ltkf_get_pet_owner_compliance_action_messages( $pet_id_for_row );
+					$pay_hint    = ! empty( $action_msgs )
+						? implode( ' · ', $action_msgs )
+						: __( 'Vaccination compliance required.', 'kennelflow-core' );
+				}
 				if ( ltkf_compliance_gatekeeper_e2e_allow_noncompliant_checkout() ) {
 					$pay_blocked = false;
+					$pay_hint    = '';
 				}
 
 				if ( 'pending_payment' === (string) $b->status ) {
 					echo '<button type="button" class="kf-portal__pay" data-kf-pay-booking="' . esc_attr( (string) $b->post_id ) . '"' . ( $pay_blocked ? ' disabled="disabled"' : '' ) . '>';
 					echo esc_html__( 'Pay now', 'kennelflow-core' );
 					echo '</button>';
-					if ( $pay_blocked ) {
-						echo ' <span class="kf-portal__pay-hint">' . esc_html__( 'Vaccination compliance required.', 'kennelflow-core' ) . '</span>';
+					if ( $pay_blocked && '' !== $pay_hint ) {
+						echo ' <span class="kf-portal__pay-hint">' . esc_html( $pay_hint ) . '</span>';
 					}
 				} elseif ( null !== $balance_ctx && isset( $balance_ctx['balance'] ) && (float) $balance_ctx['balance'] > 0 ) {
 					echo '<button type="button" class="kf-portal__pay kf-portal__pay--balance" data-kf-pay-balance="' . esc_attr( (string) $b->post_id ) . '"' . ( $pay_blocked ? ' disabled="disabled"' : '' ) . '>';
 					echo esc_html__( 'Pay remaining balance', 'kennelflow-core' );
 					echo '</button>';
-					if ( $pay_blocked ) {
-						echo ' <span class="kf-portal__pay-hint">' . esc_html__( 'Vaccination compliance required.', 'kennelflow-core' ) . '</span>';
+					if ( $pay_blocked && '' !== $pay_hint ) {
+						echo ' <span class="kf-portal__pay-hint">' . esc_html( $pay_hint ) . '</span>';
 					}
 				} else {
 					echo '<span class="kf-portal__dash" aria-hidden="true">—</span>';

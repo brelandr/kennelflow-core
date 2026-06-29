@@ -94,6 +94,23 @@ class AdminCalendarApi {
 
 		register_rest_route(
 			self::REST_NAMESPACE,
+			'/calendar/booking/(?P<id>\d+)/check-in',
+			array(
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => array( __CLASS__, 'check_in_booking' ),
+				'permission_callback' => array( __CLASS__, 'permissions_check_in_booking' ),
+				'args'                => array(
+					'id' => array(
+						'description' => __( 'kf_bookings row id.', 'kennelflow-core' ),
+						'type'        => 'integer',
+						'required'    => true,
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::REST_NAMESPACE,
 			'/bookings/(?P<id>\d+)',
 			array(
 				array(
@@ -163,7 +180,7 @@ class AdminCalendarApi {
 	 * @return bool
 	 */
 	public static function permissions() {
-		return current_user_can( 'edit_posts' );
+		return ltkf_user_can_view_hub_calendar();
 	}
 
 	/**
@@ -178,6 +195,45 @@ class AdminCalendarApi {
 			return false;
 		}
 		return current_user_can( 'edit_post', $id );
+	}
+
+	/**
+	 * May check in a calendar booking (view calendar + edit linked appointment post).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return bool
+	 */
+	public static function permissions_check_in_booking( $request ) {
+		if ( ! self::permissions() ) {
+			return false;
+		}
+
+		$table = ltkf_bookings_table_name();
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
+			return false;
+		}
+
+		$id = isset( $request['id'] ) ? absint( $request['id'] ) : 0;
+		if ( $id < 1 ) {
+			return false;
+		}
+
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- REST permission gate.
+		$post_id = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT post_id FROM %i WHERE id = %d LIMIT 1',
+				$table,
+				$id
+			)
+		);
+
+		if ( $post_id < 1 ) {
+			return false;
+		}
+
+		return current_user_can( 'edit_post', $post_id );
 	}
 
 	/**
@@ -484,6 +540,7 @@ class AdminCalendarApi {
 				'pet_id'          => isset( $row->pet_id ) ? (int) $row->pet_id : 0,
 				'pet_name'        => isset( $row->pet_name ) ? (string) $row->pet_name : '',
 				'owner_name'      => isset( $row->owner_name ) ? (string) $row->owner_name : '',
+				'owner_user_id'   => isset( $row->owner_user_id ) ? (int) $row->owner_user_id : 0,
 				'start_gmt'       => isset( $row->start_gmt ) ? (string) $row->start_gmt : '',
 				'end_gmt'         => isset( $row->end_gmt ) ? (string) $row->end_gmt : '',
 				'resource_id'     => isset( $row->resource_id ) ? (int) $row->resource_id : 0,
@@ -526,6 +583,116 @@ class AdminCalendarApi {
 		}
 
 		return rest_ensure_response( $response );
+	}
+
+	/**
+	 * POST kennelflow/v1/calendar/booking/{id}/check-in
+	 *
+	 * Sets the linked appointment post to `checked_in` and refreshes index rows.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public static function check_in_booking( $request ) {
+		$table = ltkf_bookings_table_name();
+		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
+			return new \WP_Error(
+				'ltkf_no_bookings_table',
+				__( 'Bookings table is not available.', 'kennelflow-core' ),
+				array( 'status' => 503 )
+			);
+		}
+
+		$id = absint( $request['id'] );
+		if ( $id < 1 ) {
+			return new \WP_Error(
+				'ltkf_invalid_id',
+				__( 'Invalid booking id.', 'kennelflow-core' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		global $wpdb;
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- REST load row.
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				'SELECT * FROM %i WHERE id = %d LIMIT 1',
+				$table,
+				$id
+			)
+		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared
+
+		if ( ! $row || ! isset( $row->post_id ) ) {
+			return new \WP_Error(
+				'ltkf_booking_not_found',
+				__( 'Booking not found.', 'kennelflow-core' ),
+				array( 'status' => 404 )
+			);
+		}
+
+		$post_id = absint( $row->post_id );
+		if ( $post_id < 1 ) {
+			return new \WP_Error(
+				'ltkf_no_booking_post',
+				__( 'This calendar row is not linked to an appointment record.', 'kennelflow-core' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		$booking_item = self::get_booking_calendar_item( $table, $id );
+		if ( null === $booking_item ) {
+			return new \WP_Error(
+				'ltkf_booking_load_failed',
+				__( 'Booking could not be loaded.', 'kennelflow-core' ),
+				array( 'status' => 500 )
+			);
+		}
+
+		if ( ! ltkf_calendar_booking_can_check_in( $booking_item ) ) {
+			return new \WP_Error(
+				'ltkf_check_in_not_allowed',
+				__( 'This appointment cannot be checked in from its current status.', 'kennelflow-core' ),
+				array( 'status' => 409 )
+			);
+		}
+
+		$updated = ltkf_update_booking_post_status( $post_id, 'checked_in' );
+		if ( is_wp_error( $updated ) ) {
+			return $updated;
+		}
+
+		$booking = self::get_booking_calendar_item( $table, $id );
+		if ( null === $booking ) {
+			$booking = self::get_booking_calendar_item( $table, $post_id, 'post_id' );
+		}
+		if ( null === $booking ) {
+			return new \WP_Error(
+				'ltkf_booking_load_failed',
+				__( 'Booking was checked in but could not be reloaded.', 'kennelflow-core' ),
+				array( 'status' => 500 )
+			);
+		}
+
+		/**
+		 * Fires after a calendar booking is checked in via REST.
+		 *
+		 * @since 0.3.16
+		 *
+		 * @param array           $booking Normalized booking row.
+		 * @param WP_REST_Request $request Request.
+		 * @param int             $post_id Appointment post ID.
+		 */
+		do_action( 'ltkf_rest_calendar_booking_checked_in', $booking, $request, $post_id );
+
+		return rest_ensure_response(
+			array(
+				'ok'      => true,
+				'status'  => $updated,
+				'booking' => $booking,
+			)
+		);
 	}
 
 	/**
@@ -846,16 +1013,25 @@ class AdminCalendarApi {
 	/**
 	 * One booking row formatted like GET /calendar items (pet + owner names).
 	 *
-	 * @param string $table Bookings table name.
-	 * @param int    $id    Booking id.
+	 * @param string $table     Bookings table name.
+	 * @param int    $id        Booking row id or post id (see $lookup_by).
+	 * @param string $lookup_by `id` (default) or `post_id`.
 	 * @return array|null
 	 */
-	protected static function get_booking_calendar_item( $table, $id ) {
+	protected static function get_booking_calendar_item( $table, $id, $lookup_by = 'id' ) {
 		global $wpdb;
 
 		if ( ! is_string( $table ) || ! preg_match( '/^[a-zA-Z0-9_]+$/', $table ) || ! ltkf_table_exists( $table ) ) {
 			return null;
 		}
+
+		$id = absint( $id );
+		if ( $id < 1 ) {
+			return null;
+		}
+
+		$lookup_by = 'post_id' === $lookup_by ? 'post_id' : 'id';
+		$where_sql = 'post_id' === $lookup_by ? 'b.post_id = %d' : 'b.id = %d';
 
 		$pet_type  = ltkf_get_pet_post_type();
 		$owner_key = ltkf_get_pet_owner_user_meta_key();
@@ -874,7 +1050,8 @@ class AdminCalendarApi {
 					b.booking_kind,
 					b.kennel_id AS resource_id,
 					pet.post_title AS pet_name,
-					owner.display_name AS owner_name
+					owner.display_name AS owner_name,
+					CAST( NULLIF( pm_owner.meta_value, \'\' ) AS UNSIGNED ) AS owner_user_id
 				FROM %i AS b
 				INNER JOIN %i AS pet
 					ON pet.ID = b.pet_id
@@ -885,7 +1062,7 @@ class AdminCalendarApi {
 					AND pm_owner.meta_key = %s
 				LEFT JOIN %i AS owner
 					ON owner.ID = CAST( NULLIF( pm_owner.meta_value, \'\' ) AS UNSIGNED )
-				WHERE b.id = %d
+				WHERE ' . $where_sql . '
 				LIMIT 1
 				',
 				$table,
@@ -903,18 +1080,37 @@ class AdminCalendarApi {
 			return null;
 		}
 
-		return array(
+		return self::normalize_booking_calendar_item( $row );
+	}
+
+	/**
+	 * Format a kf_bookings query row for calendar REST consumers.
+	 *
+	 * @param object $row DB row.
+	 * @return array<string, mixed>
+	 */
+	protected static function normalize_booking_calendar_item( $row ) {
+		$booking = array(
 			'id'              => isset( $row->id ) ? (int) $row->id : 0,
 			'booking_post_id' => isset( $row->post_id ) ? (int) $row->post_id : 0,
 			'pet_id'          => isset( $row->pet_id ) ? (int) $row->pet_id : 0,
 			'pet_name'        => isset( $row->pet_name ) ? (string) $row->pet_name : '',
 			'owner_name'      => isset( $row->owner_name ) ? (string) $row->owner_name : '',
+			'owner_user_id'   => isset( $row->owner_user_id ) ? (int) $row->owner_user_id : 0,
 			'start_gmt'       => isset( $row->start_gmt ) ? (string) $row->start_gmt : '',
 			'end_gmt'         => isset( $row->end_gmt ) ? (string) $row->end_gmt : '',
 			'resource_id'     => isset( $row->resource_id ) ? (int) $row->resource_id : 0,
 			'status'          => isset( $row->status ) ? (string) $row->status : '',
 			'booking_kind'    => isset( $row->booking_kind ) ? (string) $row->booking_kind : '',
 		);
+
+		if ( empty( $booking['owner_user_id'] ) && $booking['pet_id'] > 0 ) {
+			$booking['owner_user_id'] = absint( ltkf_get_pet_owner_user_id( $booking['pet_id'] ) );
+		}
+
+		$booking['record_links'] = ltkf_get_calendar_booking_record_links( $booking );
+
+		return $booking;
 	}
 
 	/**
@@ -1004,7 +1200,8 @@ class AdminCalendarApi {
 						b.booking_kind,
 						b.kennel_id AS resource_id,
 						pet.post_title AS pet_name,
-						owner.display_name AS owner_name
+						owner.display_name AS owner_name,
+						CAST( NULLIF( pm_owner.meta_value, \'\' ) AS UNSIGNED ) AS owner_user_id
 					FROM %i AS b
 					INNER JOIN %i AS pet
 						ON pet.ID = b.pet_id
@@ -1047,7 +1244,8 @@ class AdminCalendarApi {
 						b.booking_kind,
 						b.kennel_id AS resource_id,
 						pet.post_title AS pet_name,
-						owner.display_name AS owner_name
+						owner.display_name AS owner_name,
+						CAST( NULLIF( pm_owner.meta_value, \'\' ) AS UNSIGNED ) AS owner_user_id
 					FROM %i AS b
 					INNER JOIN %i AS pet
 						ON pet.ID = b.pet_id

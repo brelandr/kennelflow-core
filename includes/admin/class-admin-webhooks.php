@@ -342,7 +342,7 @@ class AdminWebhooks {
 			<?php endif; ?>
 
 			<?php if ( ! function_exists( 'as_enqueue_async_action' ) ) : ?>
-				<div class="notice notice-warning">
+				<div class="notice notice-warning is-dismissible">
 					<p>
 						<?php echo esc_html__( 'Action Scheduler is not available. Webhooks will be sent during the same request (slower). WooCommerce includes Action Scheduler.', 'kennelflow-core' ); ?>
 					</p>

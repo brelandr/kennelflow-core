@@ -230,9 +230,22 @@ class OwnerPetsRestApi {
 			? ltkf_get_boarding_wizard_pet_compliance_vaccines( $pet_id )
 			: array();
 
+		$online_boarding_enabled = function_exists( 'ltkf_is_owner_online_boarding_enabled' )
+			? ltkf_is_owner_online_boarding_enabled()
+			: false;
+		$boarding_eligible       = function_exists( 'ltkf_owner_may_request_online_boarding' )
+			? ltkf_owner_may_request_online_boarding( $pet_id, $uid )
+			: false;
+		$action_messages         = function_exists( 'ltkf_get_pet_owner_compliance_action_messages' )
+			? ltkf_get_pet_owner_compliance_action_messages( $pet_id )
+			: array();
+
 		return rest_ensure_response(
 			array(
-				'vaccines' => $rows,
+				'vaccines'                 => $rows,
+				'online_boarding_enabled'  => $online_boarding_enabled,
+				'boarding_eligible'        => $boarding_eligible,
+				'action_messages'          => $action_messages,
 			)
 		);
 	}

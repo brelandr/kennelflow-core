@@ -88,6 +88,18 @@ class Activator {
 			add_option( 'ltkf_allow_owner_clinician_selection', '0', '', false );
 		}
 
+		if ( false === get_option( 'ltkf_allow_owner_online_boarding', false ) ) {
+			add_option( 'ltkf_allow_owner_online_boarding', '1', '', false );
+		}
+
+		$default_vaccines = array( 'Rabies', 'Bordetella', 'DHPP' );
+		if ( false === get_option( 'ltkf_required_vaccines', false ) ) {
+			add_option( 'ltkf_required_vaccines', $default_vaccines, '', false );
+		}
+		if ( false === get_option( 'ltkf_boarding_required_vaccines', false ) ) {
+			add_option( 'ltkf_boarding_required_vaccines', $default_vaccines, '', false );
+		}
+
 		require_once LTKF_PLUGIN_DIR . 'includes/class-core-db.php';
 		CoreDb::install();
 
@@ -101,5 +113,26 @@ class Activator {
 		 * @since 0.1.0
 		 */
 		do_action( 'ltkf_core_activated' );
+	}
+
+	/**
+	 * Run one-time option defaults when the plugin is updated (not only on re-activation).
+	 *
+	 * @return void
+	 */
+	public static function maybe_run_version_upgrades() {
+		$stored = (string) get_option( 'ltkf_core_db_version', '0' );
+
+		if ( version_compare( $stored, '0.2.8', '<' ) && '1' !== get_option( 'ltkf_online_boarding_default_migrated', '' ) ) {
+			$current = get_option( 'ltkf_allow_owner_online_boarding', false );
+			if ( false === $current || '0' === $current ) {
+				update_option( 'ltkf_allow_owner_online_boarding', '1', false );
+			}
+			update_option( 'ltkf_online_boarding_default_migrated', '1', false );
+		}
+
+		if ( version_compare( $stored, LTKF_CORE_VERSION, '<' ) ) {
+			update_option( 'ltkf_core_db_version', LTKF_CORE_VERSION, false );
+		}
 	}
 }

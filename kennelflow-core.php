@@ -3,10 +3,10 @@
  * Plugin Name:       KennelFlow Core
  * Plugin URI:         https://wordpress.org/plugins/kennelflow-core/
  * Description:        Hub foundation for KennelFlow: shared pets & locations, owner↔pet user mapping, and contracts for add-ons (KennelFlow Boarding, KennelFlow Vet, KennelFlow Groom, etc.).
- * Version:            0.2.3
+ * Version:            0.3.23
  * Requires at least:  6.2
  * Requires PHP:       7.4
- * Tested up to:       7.0
+ * Tested up to:       6.8
  * Author:             LandTech Web Designs
  * License:            GPL-2.0-or-later
  * License URI:        https://www.gnu.org/licenses/gpl-2.0.html
@@ -17,7 +17,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'LTKF_CORE_VERSION', '0.2.3' );
+define( 'LTKF_CORE_VERSION', '0.3.23' );
 define( 'LTKF_PLUGIN_FILE', __FILE__ );
 define( 'LTKF_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LTKF_PLUGIN_URL', plugin_dir_url( __FILE__ ) );

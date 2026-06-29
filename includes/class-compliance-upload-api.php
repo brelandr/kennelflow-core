@@ -98,7 +98,7 @@ class ComplianceUploadApi {
 			);
 		}
 
-		if ( class_exists( 'ComplianceRetention' ) ) {
+		if ( class_exists( ComplianceRetention::class ) ) {
 			ComplianceRetention::maybe_upgrade_medical_records_schema();
 		}
 
@@ -186,12 +186,12 @@ class ComplianceUploadApi {
 			);
 		}
 
-		if ( class_exists( 'KennelFlow_Vet_Protected_Uploads' ) ) {
+		if ( class_exists( '\KennelFlow_Vet_Protected_Uploads' ) ) {
 			// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- KennelFlow Vet legacy documented tag (`ltkf_legacy_vet_medical_upload_subdir_hook()`).
 			add_filter( 'kennelflow_vet_medical_upload_subdir', array( __CLASS__, 'filter_compliance_upload_subdir' ), 20 );
 			add_filter( 'kennelflow_vet_handle_upload_medical_mimes', array( __CLASS__, 'filter_compliance_upload_mimes' ), 20, 3 );
 
-			$result = KennelFlow_Vet_Protected_Uploads::handle_upload_for_pet( $file, $pet_id );
+			$result = \KennelFlow_Vet_Protected_Uploads::handle_upload_for_pet( $file, $pet_id );
 
 			remove_filter( 'kennelflow_vet_handle_upload_medical_mimes', array( __CLASS__, 'filter_compliance_upload_mimes' ), 20 );
 			remove_filter( 'kennelflow_vet_medical_upload_subdir', array( __CLASS__, 'filter_compliance_upload_subdir' ), 20 );
@@ -258,7 +258,7 @@ class ComplianceUploadApi {
 		$formats = array( '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d' );
 
 		if ( ltkf_db_column_exists( $table, 'status' ) ) {
-			$data['status'] = class_exists( 'ComplianceRetention' )
+			$data['status'] = class_exists( ComplianceRetention::class )
 				? ComplianceRetention::RECORD_STATUS_PENDING_REVIEW
 				: 'pending_review';
 			$formats[]      = '%s';
@@ -316,7 +316,7 @@ class ComplianceUploadApi {
 			array(
 				'record_id'     => $record_id,
 				'attachment_id' => $attachment_id,
-				'status'        => class_exists( 'ComplianceRetention' ) ? ComplianceRetention::RECORD_STATUS_PENDING_REVIEW : 'pending_review',
+				'status'        => class_exists( ComplianceRetention::class ) ? ComplianceRetention::RECORD_STATUS_PENDING_REVIEW : 'pending_review',
 				'pet_id'        => $pet_id,
 				'vaccine_name'  => $vaccine_name,
 			)

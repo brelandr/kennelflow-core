@@ -103,7 +103,7 @@ class BookingWizardFrontend {
 					'nonce'                        => wp_create_nonce( 'wp_rest' ),
 					'isLoggedIn'                   => is_user_logged_in(),
 					'loginUrl'                     => esc_url_raw( wp_login_url( get_permalink() ) ),
-					'allowOwnerClinicianSelection' => wp_validate_boolean( get_option( 'ltkf_allow_owner_clinician_selection', '0' ) ),
+					'allowOwnerOnlineBoarding'     => function_exists( 'ltkf_is_owner_online_boarding_enabled' ) && ltkf_is_owner_online_boarding_enabled(),
 					'complianceUploadUrl'          => esc_url_raw( rest_url( 'kennelflow/v1/compliance/upload' ) ),
 					'complianceUploadAvailable'    => true,
 					'i18n'                         => array(
